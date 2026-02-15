@@ -118,7 +118,14 @@ class JwtService
 
     private function base64UrlDecode(string $value): ?string
     {
-        $decoded = base64_decode(strtr($value, '-_', '+/'), true);
+        $normalizedValue = strtr($value, '-_', '+/');
+        $paddingLength = strlen($normalizedValue) % 4;
+
+        if ($paddingLength > 0) {
+            $normalizedValue .= str_repeat('=', 4 - $paddingLength);
+        }
+
+        $decoded = base64_decode($normalizedValue, true);
 
         return $decoded === false ? null : $decoded;
     }
