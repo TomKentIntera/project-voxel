@@ -29,10 +29,10 @@ npm run dev
 ## Docker development (from repo root)
 
 ```bash
-docker compose up --build
+./scripts/platform-start.sh
 ```
 
-Routes exposed by the root gateway:
+Routes exposed by the root Traefik router:
 
 - `http://store.localhost` -> React frontend dev server
 - `http://api.localhost` -> Laravel backend/API server
@@ -40,7 +40,21 @@ Routes exposed by the root gateway:
 Stop the stack:
 
 ```bash
-docker compose down
+./scripts/platform-stop.sh
+```
+
+Reset the stack and rerun fresh migrations:
+
+```bash
+./scripts/platform-reset.sh
+```
+
+Optional reset flags:
+
+```bash
+./scripts/platform-reset.sh --rebuild   # rebuild images/recreate containers
+./scripts/platform-reset.sh --seed      # run migrate:fresh with seeders
+./scripts/platform-reset.sh --rebuild --seed
 ```
 
 If your machine does not resolve `*.localhost` automatically, add this hosts entry:
@@ -48,8 +62,6 @@ If your machine does not resolve `*.localhost` automatically, add this hosts ent
 ```text
 127.0.0.1 store.localhost api.localhost
 ```
-
-Project helper scripts are stored in the repo root `scripts/` directory.
 
 ## Next steps
 
