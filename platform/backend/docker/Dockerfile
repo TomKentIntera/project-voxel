@@ -23,7 +23,7 @@ COPY --from=composer:2 /usr/bin/composer /usr/local/bin/composer
 
 WORKDIR /var/www/html
 
-COPY docker/start-backend.sh /usr/local/bin/start-backend
+COPY scripts/start-backend.sh /usr/local/bin/start-backend
 RUN chmod +x /usr/local/bin/start-backend
 
 ENTRYPOINT ["start-backend"]

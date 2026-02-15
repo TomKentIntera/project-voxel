@@ -49,6 +49,8 @@ If your machine does not resolve `*.localhost` automatically, add this hosts ent
 127.0.0.1 store.localhost api.localhost
 ```
 
+Project helper scripts are stored in the repo root `scripts/` directory.
+
 ## Next steps
 
 - Define backend domain models and API contracts.

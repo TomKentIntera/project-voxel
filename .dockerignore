@@ -1,0 +1,13 @@
+.git
+.DS_Store
+
+platform_legacy
+
+**/node_modules
+**/vendor
+**/.env
+
+**/storage/logs
+**/storage/framework/cache/data
+**/storage/framework/sessions
+**/storage/framework/views
