@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import AuthForm from '../components/AuthForm'
-import { useAuth } from '../context/AuthContext'
+import { useAuth } from '../context/useAuth'
 import { getErrorMessage } from '../utils/getErrorMessage'
 
 function LoginPage() {

@@ -1,8 +1,8 @@
-import { createContext, useContext, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
+import { AuthContext } from './auth-context'
 import { fetchCurrentUser, loginUser, registerUser } from '../utils/authApi'
 
 const TOKEN_STORAGE_KEY = 'platform.auth.token'
-const AuthContext = createContext(undefined)
 
 function getStoredToken() {
   return window.localStorage.getItem(TOKEN_STORAGE_KEY)
@@ -13,15 +13,19 @@ export function AuthProvider({ children }) {
   const [user, setUser] = useState(null)
   const [isHydrating, setIsHydrating] = useState(() => getStoredToken() !== null)
 
+  const clearSession = useCallback(() => {
+    window.localStorage.removeItem(TOKEN_STORAGE_KEY)
+    setToken(null)
+    setUser(null)
+    setIsHydrating(false)
+  }, [])
+
   useEffect(() => {
     if (!token) {
-      setIsHydrating(false)
-      setUser(null)
       return
     }
 
     let isCancelled = false
-    setIsHydrating(true)
 
     fetchCurrentUser(token)
       .then((response) => {
@@ -31,9 +35,7 @@ export function AuthProvider({ children }) {
       })
       .catch(() => {
         if (!isCancelled) {
-          window.localStorage.removeItem(TOKEN_STORAGE_KEY)
-          setToken(null)
-          setUser(null)
+          clearSession()
         }
       })
       .finally(() => {
@@ -45,9 +47,9 @@ export function AuthProvider({ children }) {
     return () => {
       isCancelled = true
     }
-  }, [token])
+  }, [clearSession, token])
 
-  const persistToken = (nextToken) => {
+  const persistToken = useCallback((nextToken) => {
     if (nextToken) {
       window.localStorage.setItem(TOKEN_STORAGE_KEY, nextToken)
     } else {
@@ -55,28 +57,33 @@ export function AuthProvider({ children }) {
     }
 
     setToken(nextToken)
-  }
+  }, [])
 
-  const login = async (credentials) => {
-    const response = await loginUser(credentials)
-    persistToken(response.token)
-    setUser(response.user)
+  const login = useCallback(
+    async (credentials) => {
+      const response = await loginUser(credentials)
+      persistToken(response.token)
+      setUser(response.user)
 
-    return response.user
-  }
+      return response.user
+    },
+    [persistToken],
+  )
 
-  const register = async (payload) => {
-    const response = await registerUser(payload)
-    persistToken(response.token)
-    setUser(response.user)
+  const register = useCallback(
+    async (payload) => {
+      const response = await registerUser(payload)
+      persistToken(response.token)
+      setUser(response.user)
 
-    return response.user
-  }
+      return response.user
+    },
+    [persistToken],
+  )
 
-  const logout = () => {
-    persistToken(null)
-    setUser(null)
-  }
+  const logout = useCallback(() => {
+    clearSession()
+  }, [clearSession])
 
   const value = useMemo(
     () => ({
@@ -88,18 +95,8 @@ export function AuthProvider({ children }) {
       register,
       logout,
     }),
-    [isHydrating, token, user],
+    [isHydrating, login, logout, register, token, user],
   )
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
-}
-
-export function useAuth() {
-  const context = useContext(AuthContext)
-
-  if (!context) {
-    throw new Error('useAuth must be used inside an AuthProvider.')
-  }
-
-  return context
 }

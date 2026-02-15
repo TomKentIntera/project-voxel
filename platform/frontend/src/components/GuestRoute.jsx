@@ -1,5 +1,5 @@
 import { Navigate } from 'react-router-dom'
-import { useAuth } from '../context/AuthContext'
+import { useAuth } from '../context/useAuth'
 
 function GuestRoute({ children }) {
   const { isAuthenticated, isHydrating } = useAuth()
