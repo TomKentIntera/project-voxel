@@ -99,43 +99,54 @@ No architecture, no implementation - just observable behaviour.
 
 ---
 
+## Server lifecycle transitions
+
+54. Starting a stopped server transitions state: Stopped -> Starting -> Running.
+55. Stopping a running server transitions state: Running -> Stopping -> Stopped.
+56. Restarting a running server transitions state: Running -> Restarting -> Running.
+57. Reinstalling a server transitions state: Running or Stopped -> Reinstalling -> Ready.
+58. If payment remains unpaid past grace period, the server transitions to Suspended automatically.
+59. After extended non-payment, a suspended server transitions to Deleted automatically.
+
+---
+
 ## Panel access
 
-54. User can open the management panel from the dashboard.
-55. The user only sees their own server(s) in the panel.
-56. Console access works.
-57. File upload/download works.
+60. User can open the management panel from the dashboard.
+61. The user only sees their own server(s) in the panel.
+62. Console access works.
+63. File upload/download works.
 
 ---
 
 ## Billing lifecycle
 
-58. User can cancel their subscription.
-59. After cancellation period ends, the server is suspended automatically.
-60. If payment fails, the server enters a past-due state.
-61. After grace period, the server suspends automatically.
-62. After extended non-payment, the server is deleted automatically.
+64. User can cancel their subscription.
+65. After cancellation period ends, the server is suspended automatically.
+66. If payment fails, the server enters a past-due state.
+67. After grace period, the server suspends automatically.
+68. After extended non-payment, the server is deleted automatically.
 
 ---
 
 ## Operational correctness
 
-63. A purchased server is created exactly once (no duplicates on retries).
-64. DNS records are created automatically for new servers.
-65. DNS records are removed when servers are deleted.
-66. Server actions (start/stop/reinstall) reliably reach the game server.
-67. The system records which node and port each server is assigned to.
-68. The platform detects if a server process is offline.
-69. Player count updates automatically within ~30 seconds.
+69. A purchased server is created exactly once (no duplicates on retries).
+70. DNS records are created automatically for new servers.
+71. DNS records are removed when servers are deleted.
+72. Server actions (start/stop/reinstall) reliably reach the game server.
+73. The system records which node and port each server is assigned to.
+74. The platform detects if a server process is offline.
+75. Player count updates automatically within ~30 seconds.
 
 ---
 
 ## Reliability expectations
 
-70. A single failure during provisioning does not create a broken paid server (retry succeeds).
-71. Restarting the web app does not lose server state.
-72. Restarting the control service does not lose server mappings.
-73. Existing servers remain joinable after system restarts.
+76. A single failure during provisioning does not create a broken paid server (retry succeeds).
+77. Restarting the web app does not lose server state.
+78. Restarting the control service does not lose server mappings.
+79. Existing servers remain joinable after system restarts.
 
 ---
 
