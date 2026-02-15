@@ -1,42 +1,121 @@
-#root {
-  max-width: 1280px;
-  margin: 0 auto;
-  padding: 2rem;
-  text-align: center;
+.app-shell {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2rem 1rem;
 }
 
-.logo {
-  height: 6em;
-  padding: 1.5em;
-  will-change: filter;
-  transition: filter 300ms;
-}
-.logo:hover {
-  filter: drop-shadow(0 0 2em #646cffaa);
-}
-.logo.react:hover {
-  filter: drop-shadow(0 0 2em #61dafbaa);
+.auth-card,
+.dashboard-card {
+  width: 100%;
+  max-width: 420px;
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 1.5rem;
+  box-shadow: 0 8px 30px rgba(15, 23, 42, 0.08);
 }
 
-@keyframes logo-spin {
-  from {
-    transform: rotate(0deg);
-  }
-  to {
-    transform: rotate(360deg);
-  }
+.auth-card h1,
+.dashboard-card h1 {
+  margin-top: 0;
+  margin-bottom: 1rem;
+  font-size: 1.5rem;
 }
 
-@media (prefers-reduced-motion: no-preference) {
-  a:nth-of-type(2) .logo {
-    animation: logo-spin infinite 20s linear;
-  }
+.auth-form {
+  display: grid;
+  gap: 0.9rem;
 }
 
-.card {
-  padding: 2em;
+.form-field {
+  display: grid;
+  gap: 0.4rem;
+  font-size: 0.92rem;
+  font-weight: 600;
+  color: #334155;
 }
 
-.read-the-docs {
-  color: #888;
+.form-field input {
+  padding: 0.65rem 0.75rem;
+  border-radius: 8px;
+  border: 1px solid #cbd5e1;
+  font: inherit;
+}
+
+.form-field input:focus {
+  outline: 2px solid #93c5fd;
+  border-color: #3b82f6;
+}
+
+.primary-button,
+.secondary-button {
+  margin-top: 0.2rem;
+  border: 0;
+  border-radius: 8px;
+  padding: 0.7rem 1rem;
+  font-size: 0.95rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.primary-button {
+  background: #2563eb;
+  color: #ffffff;
+}
+
+.primary-button:disabled {
+  opacity: 0.65;
+  cursor: not-allowed;
+}
+
+.secondary-button {
+  background: #0f172a;
+  color: #ffffff;
+}
+
+.auth-switch {
+  margin-top: 1rem;
+  margin-bottom: 0;
+  font-size: 0.92rem;
+}
+
+.form-error {
+  background: #fef2f2;
+  color: #b91c1c;
+  border: 1px solid #fecaca;
+  border-radius: 8px;
+  padding: 0.6rem 0.75rem;
+  margin-bottom: 1rem;
+  font-size: 0.9rem;
+}
+
+.auth-loading {
+  color: #475569;
+}
+
+.dashboard-card p {
+  margin-top: 0;
+  margin-bottom: 1rem;
+  color: #475569;
+}
+
+.profile-list {
+  margin: 0 0 1rem;
+  display: grid;
+  gap: 0.75rem;
+}
+
+.profile-list dt {
+  font-size: 0.75rem;
+  color: #64748b;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.profile-list dd {
+  margin: 0.2rem 0 0;
+  font-weight: 600;
+  color: #1e293b;
 }
