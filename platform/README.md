@@ -26,6 +26,29 @@ npm install
 npm run dev
 ```
 
+## Docker development (from repo root)
+
+```bash
+docker compose up --build
+```
+
+Routes exposed by the root gateway:
+
+- `http://store.localhost` -> React frontend dev server
+- `http://api.localhost` -> Laravel backend/API server
+
+Stop the stack:
+
+```bash
+docker compose down
+```
+
+If your machine does not resolve `*.localhost` automatically, add this hosts entry:
+
+```text
+127.0.0.1 store.localhost api.localhost
+```
+
 ## Next steps
 
 - Define backend domain models and API contracts.

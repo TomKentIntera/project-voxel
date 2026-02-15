@@ -1,0 +1,63 @@
+services:
+  backend:
+    build:
+      context: ./platform/backend
+      dockerfile: docker/Dockerfile
+    working_dir: /var/www/html
+    volumes:
+      - ./platform/backend:/var/www/html
+      - backend_vendor:/var/www/html/vendor
+    command: ["web"]
+    expose:
+      - "8000"
+    networks:
+      - platform
+
+  backend-worker:
+    build:
+      context: ./platform/backend
+      dockerfile: docker/Dockerfile
+    working_dir: /var/www/html
+    volumes:
+      - ./platform/backend:/var/www/html
+      - backend_vendor:/var/www/html/vendor
+    command: ["worker"]
+    depends_on:
+      - backend
+    networks:
+      - platform
+
+  frontend:
+    image: node:22-alpine
+    working_dir: /app
+    environment:
+      CHOKIDAR_USEPOLLING: "true"
+      VITE_HMR_HOST: store.localhost
+      VITE_HMR_CLIENT_PORT: "80"
+    volumes:
+      - ./platform/frontend:/app
+      - frontend_node_modules:/app/node_modules
+    command: sh -lc "npm install && npm run dev -- --host 0.0.0.0 --port 5173 --strictPort"
+    expose:
+      - "5173"
+    networks:
+      - platform
+
+  gateway:
+    image: nginx:1.27-alpine
+    depends_on:
+      - backend
+      - frontend
+    ports:
+      - "80:80"
+    volumes:
+      - ./docker/nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
+    networks:
+      - platform
+
+networks:
+  platform:
+
+volumes:
+  backend_vendor:
+  frontend_node_modules:
