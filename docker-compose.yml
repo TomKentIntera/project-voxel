@@ -6,6 +6,7 @@ services:
     working_dir: /var/www/html
     volumes:
       - ./platform/backend:/var/www/html
+      - ./packages:/var/packages:ro
       - backend_vendor:/var/www/html/vendor
     command: ["web"]
     expose:
@@ -25,6 +26,7 @@ services:
     working_dir: /var/www/html
     volumes:
       - ./platform/backend:/var/www/html
+      - ./packages:/var/packages:ro
       - backend_vendor:/var/www/html/vendor
     command: ["worker"]
     depends_on:
