@@ -49,7 +49,10 @@ class RegisteredUserController extends Controller
             'password' => Hash::make($request->password),
         ]);
 
-        $stripeCustomer = $user->createAsStripeCustomer();
+        // Only create Stripe customer if keys are configured
+        if (config('cashier.secret')) {
+            $user->createAsStripeCustomer();
+        }
 
         event(new Registered($user));
 

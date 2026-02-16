@@ -1,0 +1,132 @@
+/* ── Storybook layout ─────────────────────────────────────────────── */
+
+.storybook {
+  display: flex;
+  height: 100vh;
+  overflow: hidden;
+  font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI',
+    sans-serif;
+}
+
+/* ── Sidebar ─────────────────────────────────────────────────────── */
+
+.storybook-sidebar {
+  width: 260px;
+  min-width: 260px;
+  background: #0f172a;
+  color: #e2e8f0;
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+}
+
+.storybook-sidebar h2 {
+  padding: 1.25rem 1rem 0.5rem;
+  margin: 0;
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: #64748b;
+}
+
+.storybook-sidebar-header {
+  padding: 1.25rem 1rem;
+  border-bottom: 1px solid #1e293b;
+}
+
+.storybook-sidebar-header h1 {
+  margin: 0;
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: #f8fafc;
+}
+
+.storybook-sidebar-header p {
+  margin: 0.25rem 0 0;
+  font-size: 0.75rem;
+  color: #64748b;
+}
+
+.storybook-nav {
+  list-style: none;
+  margin: 0;
+  padding: 0 0 1rem;
+}
+
+.storybook-nav li {
+  margin: 0;
+}
+
+.storybook-nav button {
+  display: block;
+  width: 100%;
+  text-align: left;
+  background: none;
+  border: none;
+  padding: 0.55rem 1rem;
+  font-size: 0.85rem;
+  color: #94a3b8;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+
+.storybook-nav button:hover {
+  background: #1e293b;
+  color: #f1f5f9;
+}
+
+.storybook-nav button.active {
+  background: #1e293b;
+  color: #38bdf8;
+  font-weight: 600;
+}
+
+/* ── Main area ───────────────────────────────────────────────────── */
+
+.storybook-main {
+  flex: 1;
+  overflow-y: auto;
+  background: #f1f5f9;
+}
+
+.storybook-toolbar {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  background: #ffffff;
+  border-bottom: 1px solid #e2e8f0;
+  padding: 0.75rem 1.5rem;
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.storybook-toolbar h3 {
+  margin: 0;
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: #0f172a;
+}
+
+.storybook-toolbar label {
+  margin-left: auto;
+  font-size: 0.8rem;
+  color: #475569;
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  cursor: pointer;
+}
+
+/* ── Preview pane ────────────────────────────────────────────────── */
+
+.storybook-preview {
+  padding: 2rem 1.5rem;
+}
+
+.storybook-preview-dark {
+  background: #19233f;
+  color: #96a1c2;
+  font-family: 'Open Sans', sans-serif;
+}
+

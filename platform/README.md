@@ -36,6 +36,7 @@ Routes exposed by the root Traefik router:
 
 - `http://store.localhost` -> React frontend dev server
 - `http://api.localhost` -> Laravel backend/API server
+- `http://storybook.localhost` -> Component storybook (dev only)
 
 Stop the stack:
 
@@ -60,7 +61,7 @@ Optional reset flags:
 If your machine does not resolve `*.localhost` automatically, add this hosts entry:
 
 ```text
-127.0.0.1 store.localhost api.localhost
+127.0.0.1 store.localhost api.localhost storybook.localhost
 ```
 
 ## Next steps

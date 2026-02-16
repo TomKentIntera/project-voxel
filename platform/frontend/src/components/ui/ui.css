@@ -1,0 +1,243 @@
+/* ─── Shared UI Component Styles ──────────────────────────────────── */
+/* Designed for the dark Intera theme (#131a2e background)             */
+
+/* ─── Input ──────────────────────────────────────────────────────── */
+.ui-field {
+  margin-top: 20px;
+}
+
+.ui-field:first-child {
+  margin-top: 0;
+}
+
+.ui-label {
+  display: flex;
+  color: #b7c0df;
+  font-size: 12px;
+  font-weight: 100;
+  margin-bottom: 6px;
+}
+
+.ui-input {
+  width: 100%;
+  height: 40px;
+  border-radius: 5px;
+  background: #343d5d;
+  border: none;
+  color: white;
+  padding: 0 20px;
+  font-size: 14px;
+  outline: none;
+  transition: box-shadow 0.15s ease;
+}
+
+.ui-input:focus {
+  box-shadow: 0 0 0 2px rgba(95, 189, 113, 0.4);
+}
+
+.ui-input::placeholder {
+  color: #6b7ba0;
+}
+
+.ui-input:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* ─── Select ─────────────────────────────────────────────────────── */
+.ui-select {
+  width: 100%;
+  height: 50px;
+  border-radius: 10px;
+  background: #343d5d;
+  color: white;
+  border: none;
+  padding: 0 20px;
+  font-size: 14px;
+  outline: none;
+  cursor: pointer;
+  appearance: none;
+  -webkit-appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath fill='%23b7c0df' d='M1.41 0L6 4.58 10.59 0 12 1.41l-6 6-6-6z'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 16px center;
+  transition: box-shadow 0.15s ease;
+}
+
+.ui-select:focus {
+  box-shadow: 0 0 0 2px rgba(95, 189, 113, 0.4);
+}
+
+.ui-select:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.ui-select-label {
+  color: white;
+  font-weight: 400;
+  display: block;
+  margin-top: 30px;
+  font-size: 16px;
+  margin-bottom: 8px;
+}
+
+.ui-select-label:first-child {
+  margin-top: 0;
+}
+
+/* ─── Button ─────────────────────────────────────────────────────── */
+.ui-btn {
+  display: inline-block;
+  padding: 10px 35px;
+  font-size: 14px;
+  font-weight: 600;
+  text-align: center;
+  border: none;
+  border-radius: 10px;
+  cursor: pointer;
+  text-decoration: none;
+  transition: background 0.15s ease, opacity 0.15s ease;
+  line-height: 1.5;
+}
+
+.ui-btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+/* Variants */
+.ui-btn-primary {
+  background: #5fbd71;
+  color: #fff;
+}
+
+.ui-btn-primary:hover:not(:disabled) {
+  background: #4da85f;
+}
+
+.ui-btn-secondary {
+  background: #2955c5;
+  color: #fff;
+}
+
+.ui-btn-secondary:hover:not(:disabled) {
+  background: #1b4cc9;
+}
+
+.ui-btn-outline {
+  background: transparent;
+  color: #9aa6ca;
+  border: 1px solid rgba(255, 255, 255, 0.5);
+}
+
+.ui-btn-outline:hover:not(:disabled) {
+  background: #2955c5;
+  border-color: #2955c5;
+  color: #fff;
+}
+
+.ui-btn-danger {
+  background: #EF2D56;
+  color: #fff;
+}
+
+.ui-btn-danger:hover:not(:disabled) {
+  background: #d42549;
+}
+
+.ui-btn-dark {
+  background: #0f172a;
+  color: #fff;
+}
+
+.ui-btn-dark:hover:not(:disabled) {
+  background: #1e293b;
+}
+
+/* Sizes */
+.ui-btn-sm {
+  font-size: 13px;
+  padding: 7px 20px;
+}
+
+.ui-btn-lg {
+  font-size: 15px;
+  padding: 14px 42px;
+}
+
+.ui-btn-block {
+  display: block;
+  width: 100%;
+}
+
+/* ─── Checkbox ───────────────────────────────────────────────────── */
+.ui-checkbox {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  cursor: pointer;
+}
+
+.ui-checkbox-input {
+  width: 18px;
+  height: 18px;
+  border-radius: 4px;
+  border: 1px solid #4a5580;
+  background: #343d5d;
+  cursor: pointer;
+  accent-color: #5fbd71;
+  flex-shrink: 0;
+}
+
+.ui-checkbox-label {
+  color: #b7c0df;
+  font-size: 12px;
+  line-height: 1;
+  user-select: none;
+}
+
+/* ─── Alert ──────────────────────────────────────────────────────── */
+.ui-alert {
+  padding: 15px 20px;
+  border-radius: 8px;
+  font-size: 14px;
+  margin-bottom: 20px;
+}
+
+.ui-alert p {
+  margin: 0;
+}
+
+.ui-alert a {
+  text-decoration: underline;
+}
+
+.ui-alert-danger {
+  background: rgba(239, 45, 86, 0.15);
+  color: #ff8a9e;
+  border: 1px solid rgba(239, 45, 86, 0.3);
+}
+
+.ui-alert-danger a {
+  color: #ff8a9e;
+}
+
+.ui-alert-success {
+  background: rgba(47, 191, 113, 0.15);
+  color: #7adba2;
+  border: 1px solid rgba(47, 191, 113, 0.3);
+}
+
+.ui-alert-info {
+  background: rgba(41, 85, 197, 0.15);
+  color: #8ab4f8;
+  border: 1px solid rgba(41, 85, 197, 0.3);
+}
+
+.ui-alert-warning {
+  background: rgba(255, 193, 7, 0.15);
+  color: #ffd54f;
+  border: 1px solid rgba(255, 193, 7, 0.3);
+}
+

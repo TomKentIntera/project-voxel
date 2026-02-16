@@ -4,7 +4,9 @@ export function registerUser(payload) {
   return apiRequest('/api/auth/register', {
     method: 'POST',
     body: {
-      name: payload.name,
+      username: payload.username,
+      first_name: payload.firstName,
+      last_name: payload.lastName,
       email: payload.email,
       password: payload.password,
       password_confirmation: payload.passwordConfirmation,

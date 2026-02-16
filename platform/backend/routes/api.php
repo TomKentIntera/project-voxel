@@ -1,6 +1,9 @@
 <?php
 
 use App\Http\Controllers\AuthController;
+use App\Http\Controllers\BannerController;
+use App\Http\Controllers\FaqController;
+use App\Http\Controllers\PlanController;
 use Illuminate\Support\Facades\Route;
 
 Route::prefix('auth')->group(function (): void {
@@ -8,3 +11,8 @@ Route::prefix('auth')->group(function (): void {
     Route::post('/login', [AuthController::class, 'login']);
     Route::middleware('auth.jwt')->get('/me', [AuthController::class, 'me']);
 });
+
+Route::get('/banner', [BannerController::class, 'index']);
+Route::get('/plans', [PlanController::class, 'index']);
+Route::get('/plans/recommend', [PlanController::class, 'recommend']);
+Route::get('/faqs', [FaqController::class, 'index']);

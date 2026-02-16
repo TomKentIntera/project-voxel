@@ -9,5 +9,6 @@ cd "$ROOT_DIR"
 docker compose up -d
 
 echo "Platform stack started."
-echo "Frontend: http://store.localhost"
-echo "API:      http://api.localhost"
+echo "Frontend:  http://store.localhost"
+echo "API:       http://api.localhost"
+echo "Storybook: http://storybook.localhost"

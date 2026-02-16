@@ -50,6 +50,28 @@ services:
       - traefik.http.routers.store.rule=Host(`store.localhost`)
       - traefik.http.routers.store.entrypoints=web
       - traefik.http.services.store.loadbalancer.server.port=5173
+      # Component storybook (same Vite server, subdomain-routed)
+      - traefik.http.routers.storybook.rule=Host(`storybook.localhost`)
+      - traefik.http.routers.storybook.entrypoints=web
+      - traefik.http.routers.storybook.service=store
+    networks:
+      - platform
+
+  legacy:
+    build:
+      context: .
+      dockerfile: platform_legacy/docker/dev/Dockerfile
+    working_dir: /var/www/html
+    volumes:
+      - ./platform_legacy:/var/www/html
+      - legacy_vendor:/var/www/html/vendor
+    expose:
+      - "8080"
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.legacy.rule=Host(`legacy.localhost`)
+      - traefik.http.routers.legacy.entrypoints=web
+      - traefik.http.services.legacy.loadbalancer.server.port=8080
     networks:
       - platform
 
@@ -62,6 +84,7 @@ services:
     depends_on:
       - backend
       - frontend
+      - legacy
     ports:
       - "80:80"
     volumes:
@@ -75,3 +98,4 @@ networks:
 volumes:
   backend_vendor:
   frontend_node_modules:
+  legacy_vendor:

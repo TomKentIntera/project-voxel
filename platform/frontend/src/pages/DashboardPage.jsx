@@ -1,4 +1,5 @@
 import { useAuth } from '../context/useAuth'
+import { Button } from '../components/ui'
 
 function DashboardPage() {
   const { user, logout } = useAuth()
@@ -19,9 +20,9 @@ function DashboardPage() {
         </div>
       </dl>
 
-      <button type="button" className="secondary-button" onClick={logout}>
+      <Button variant="dark" onClick={logout}>
         Log out
-      </button>
+      </Button>
     </main>
   )
 }

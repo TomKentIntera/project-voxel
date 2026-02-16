@@ -73,16 +73,21 @@ class StoreController extends BaseController
 
     public function getClientArea() {
         $user = Auth::user();
-        $stripeCustomer = $user->createOrGetStripeCustomer();
 
-        //dd($user->servers);
+        // Only create/fetch Stripe customer if keys are configured
+        if (config('cashier.secret')) {
+            $user->createOrGetStripeCustomer();
+        }
 
         return view('clientarea')->with('user', $user);
     }
 
     public function getBillingArea() {
         $user = Auth::user();
-        
+
+        if (!config('cashier.secret')) {
+            return redirect('/client')->with('error', 'Stripe is not configured.');
+        }
 
         return $user->redirectToBillingPortal();
     }
