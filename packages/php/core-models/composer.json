@@ -13,6 +13,13 @@
             "Interadigital\\CoreModels\\": "src/"
         }
     },
+    "extra": {
+        "laravel": {
+            "providers": [
+                "Interadigital\\CoreModels\\CoreModelsServiceProvider"
+            ]
+        }
+    },
     "minimum-stability": "stable",
     "prefer-stable": true
 }

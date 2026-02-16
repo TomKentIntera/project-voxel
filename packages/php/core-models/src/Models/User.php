@@ -4,11 +4,15 @@ declare(strict_types=1);
 
 namespace Interadigital\CoreModels\Models;
 
+use Illuminate\Database\Eloquent\Factories\Factory;
+use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
+use Interadigital\CoreModels\Database\Factories\UserFactory;
 
 class User extends Authenticatable
 {
+    use HasFactory;
     use Notifiable;
 
     /**
@@ -46,5 +50,10 @@ class User extends Authenticatable
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
         ];
+    }
+
+    protected static function newFactory(): Factory
+    {
+        return UserFactory::new();
     }
 }

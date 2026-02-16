@@ -2,12 +2,12 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\User;
 use App\Services\JwtService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Validation\Rule;
+use Interadigital\CoreModels\Models\User;
 use Symfony\Component\HttpFoundation\Response;
 
 class AuthController extends Controller
