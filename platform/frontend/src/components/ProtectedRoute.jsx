@@ -1,0 +1,19 @@
+import { Navigate, useLocation } from 'react-router-dom'
+import { useAuth } from '../context/useAuth'
+
+function ProtectedRoute({ children }) {
+  const { isAuthenticated, isHydrating } = useAuth()
+  const location = useLocation()
+
+  if (isHydrating) {
+    return <p className="auth-loading">Checking your session...</p>
+  }
+
+  if (!isAuthenticated) {
+    return <Navigate to="/login" replace state={{ from: location }} />
+  }
+
+  return children
+}
+
+export default ProtectedRoute
