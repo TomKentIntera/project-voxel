@@ -27,15 +27,6 @@ class AvailabilityNotification extends Model
     ];
 
     /**
-     * The event map for the model.
-     *
-     * @var array<string, class-string>
-     */
-    protected $dispatchesEvents = [
-        'created' => \App\Events\AvailabilityNotificationCreated::class,
-    ];
-
-    /**
      * Route notifications for the Slack channel.
      */
     public function routeNotificationForSlack(object $notification): mixed
