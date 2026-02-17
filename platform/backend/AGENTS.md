@@ -89,6 +89,9 @@ laravel-project/
 - Place each enum in its own file named `{Thing}Enum.php` within the appropriate `App/Services/...` subdirectory (for example, `App/Services/Posts/Media/TypeEnum.php`).
 - Run `php artisan test` locally and ensure it passes before opening a PR with backend changes.
 - API endpoints should be stateless, relying upon the JWT not any session or web guards.
+- Shared Eloquent models, shared model migrations, and shared model factories must be created in `packages/php/core-models`.
+- Do not create new shared model classes in `platform/backend/app/Models`; consume `Interadigital\\CoreModels\\Models\\...` instead.
+- Do not create duplicate shared model factories or shared model migrations in `platform/backend/database`; update `interadigital/core-models` and then refresh the lockfile.
 
 ### PHP/Laravel Best Practices
 

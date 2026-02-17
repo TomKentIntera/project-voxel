@@ -2,10 +2,10 @@
 
 namespace App\Http\Middleware;
 
-use App\Models\User;
 use App\Services\JwtService;
 use Closure;
 use Illuminate\Http\Request;
+use Interadigital\CoreModels\Models\User;
 use Symfony\Component\HttpFoundation\Response;
 
 class AuthenticateWithJwt

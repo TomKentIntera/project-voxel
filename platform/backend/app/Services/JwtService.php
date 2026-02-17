@@ -2,8 +2,8 @@
 
 namespace App\Services;
 
-use App\Models\User;
 use Illuminate\Support\Str;
+use Interadigital\CoreModels\Models\User;
 use RuntimeException;
 
 class JwtService

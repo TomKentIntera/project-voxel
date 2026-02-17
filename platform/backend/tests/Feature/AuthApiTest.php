@@ -2,8 +2,8 @@
 
 namespace Tests\Feature;
 
-use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Interadigital\CoreModels\Models\User;
 use Tests\TestCase;
 
 class AuthApiTest extends TestCase
@@ -13,6 +13,9 @@ class AuthApiTest extends TestCase
     public function test_user_can_register_and_receive_a_jwt(): void
     {
         $response = $this->postJson('/api/auth/register', [
+            'username' => 'alex-example',
+            'first_name' => 'Alex',
+            'last_name' => 'Example',
             'name' => 'Alex Example',
             'email' => 'alex@example.com',
             'password' => 'secret1234',
