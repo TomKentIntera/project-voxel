@@ -49,15 +49,30 @@ else
   docker compose up -d
 fi
 
-echo "Waiting for backend to become ready..."
-until docker compose exec -T backend php artisan about >/dev/null 2>&1; do
-  sleep 2
-done
+wait_for_service() {
+  service="$1"
+  port="$2"
+  echo "Waiting for $service to become ready..."
+  elapsed=0
+  until docker compose exec -T "$service" php -r "exit(@fsockopen('127.0.0.1', $port) ? 0 : 1);" 2>/dev/null; do
+    elapsed=$((elapsed + 2))
+    if [ "$elapsed" -ge 10 ]; then
+      echo "$service did not become ready within 10 seconds – check 'docker compose logs $service'." >&2
+      exit 1
+    fi
+    sleep 2
+  done
+}
+
+wait_for_service backend 8000
+wait_for_service legacy 8080
 
 if [ "$seed" = "true" ]; then
   docker compose exec -T backend php artisan migrate:fresh --seed --force --no-interaction
+  docker compose exec -T legacy php artisan migrate:fresh --seed --force --no-interaction
 else
   docker compose exec -T backend php artisan migrate:fresh --force --no-interaction
+  docker compose exec -T legacy php artisan migrate:fresh --force --no-interaction
 fi
 
 echo "Platform stack reset complete."

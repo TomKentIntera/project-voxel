@@ -5,7 +5,7 @@
 <div class="layout-text right-layout gray-layout padding-bottom60 padding-top60 full-height">
     <div class="container">
         <div class="row">
-            @if(isset($errors))
+            @if($errors->any())
             <div class="col-xs-12 col-sm-8 col-md-6 col-sm-offset-2 col-md-offset-3">
                 <div class="alert alert-danger">
                     <p>Those details don't match anything we have on record. Please try again or <a href="{{ route('password.request') }}">reset your password</a>.</p>

@@ -1,4 +1,24 @@
 services:
+  mysql:
+    image: mysql:8.0
+    environment:
+      MYSQL_ROOT_PASSWORD: secret
+      MYSQL_DATABASE: store
+      MYSQL_USER: voxel
+      MYSQL_PASSWORD: secret
+    volumes:
+      - mysql_data:/var/lib/mysql
+      - ./docker/mysql/init:/docker-entrypoint-initdb.d:ro
+    ports:
+      - "3306:3306"
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-psecret"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    networks:
+      - platform
+
   backend:
     build:
       context: .
@@ -11,6 +31,9 @@ services:
     command: ["web"]
     expose:
       - "8000"
+    depends_on:
+      mysql:
+        condition: service_healthy
     labels:
       - traefik.enable=true
       - traefik.http.routers.api.rule=Host(`api.localhost`)
@@ -69,11 +92,33 @@ services:
       - legacy_vendor:/var/www/html/vendor
     expose:
       - "8080"
+    depends_on:
+      mysql:
+        condition: service_healthy
     labels:
       - traefik.enable=true
       - traefik.http.routers.legacy.rule=Host(`legacy.localhost`)
       - traefik.http.routers.legacy.entrypoints=web
       - traefik.http.services.legacy.loadbalancer.server.port=8080
+    networks:
+      - platform
+
+  phpmyadmin:
+    image: phpmyadmin:latest
+    environment:
+      PMA_HOST: mysql
+      PMA_USER: root
+      PMA_PASSWORD: secret
+    expose:
+      - "80"
+    depends_on:
+      mysql:
+        condition: service_healthy
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.pma.rule=Host(`pma.localhost`)
+      - traefik.http.routers.pma.entrypoints=web
+      - traefik.http.services.pma.loadbalancer.server.port=80
     networks:
       - platform
 
@@ -98,6 +143,7 @@ networks:
   platform:
 
 volumes:
+  mysql_data:
   backend_vendor:
   frontend_node_modules:
   legacy_vendor:

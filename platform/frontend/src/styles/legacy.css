@@ -3983,3 +3983,30 @@ p.server-date {
     font-size: 0.9em;
     margin-bottom: 10px;
 }
+
+/* Dashboard: account-nav logout button styled like the anchor links */
+.account-nav .account-nav-logout {
+    display: block;
+    width: 100%;
+    padding: 20px;
+    background: none;
+    border: none;
+    color: inherit;
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+}
+
+.account-nav .account-nav-logout:hover {
+    background: #2fbf71;
+    color: white;
+}
+
+.account-nav .account-nav-logout i {
+    margin-right: 10px;
+    color: #2fbf71;
+}
+
+.account-nav .account-nav-logout:hover i {
+    color: #1e2746;
+}

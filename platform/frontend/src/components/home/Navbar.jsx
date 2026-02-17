@@ -72,7 +72,7 @@ export default function Navbar() {
               <Link to="/faqs" className={pathname === '/faqs' ? 'active' : ''} onClick={closeMenu}>FAQs</Link>
             </li>
             <li>
-              <Link to="/login" className="btn btn-primary" onClick={closeMenu}>
+              <Link to="/dashboard" className="btn btn-primary" onClick={closeMenu}>
                 <i className="fa fa-user"></i> Client Area
               </Link>
             </li>

@@ -36,9 +36,7 @@ function App() {
           path="/dashboard"
           element={
             <ProtectedRoute>
-              <div className="app-shell">
-                <DashboardPage />
-              </div>
+              <DashboardPage />
             </ProtectedRoute>
           }
         />
