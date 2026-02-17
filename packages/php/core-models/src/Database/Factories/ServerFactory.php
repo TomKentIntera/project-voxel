@@ -6,6 +6,7 @@ namespace Interadigital\CoreModels\Database\Factories;
 
 use Illuminate\Database\Eloquent\Factories\Factory;
 use Illuminate\Support\Str;
+use Interadigital\CoreModels\Enums\ServerStatus;
 use Interadigital\CoreModels\Models\Server;
 
 /**
@@ -36,7 +37,7 @@ class ServerFactory extends Factory
             'stripe_tx_return' => 0,
             'user_id' => 0,
             'suspended' => 0,
-            'status' => 0,
+            'status' => ServerStatus::NEW->value,
             'ptero_id' => 0,
             'referral_id' => 0,
             'referral_paid' => 0,

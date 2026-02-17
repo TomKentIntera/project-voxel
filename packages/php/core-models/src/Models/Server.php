@@ -11,6 +11,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Support\Facades\Config;
 use Interadigital\CoreModels\Database\Factories\ServerFactory;
+use Interadigital\CoreModels\Enums\ServerStatus;
 
 class Server extends Model
 {
@@ -74,6 +75,17 @@ class Server extends Model
         }
 
         return null;
+    }
+
+    public function statusEnum(): ?ServerStatus
+    {
+        $status = $this->getAttribute('status');
+
+        if (! is_string($status)) {
+            return null;
+        }
+
+        return ServerStatus::tryFrom($status);
     }
 
     protected static function newFactory(): Factory
