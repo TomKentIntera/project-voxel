@@ -77,7 +77,7 @@ jobs:
           php artisan key:generate --ansi
 
       - name: Run backend API tests
-        run: php artisan test --testsuite=Feature --filter=Api --colors=always
+        run: php artisan test --testsuite=API --colors=always
 
   frontend-tests:
     name: Frontend Tests
