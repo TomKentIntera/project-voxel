@@ -11,4 +11,5 @@ docker compose up -d
 echo "Platform stack started."
 echo "Frontend:  http://store.localhost"
 echo "API:       http://api.localhost"
+echo "Orchestrator: http://orchestrator.localhost"
 echo "Storybook: http://storybook.localhost"

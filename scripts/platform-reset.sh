@@ -65,13 +65,16 @@ wait_for_service() {
 }
 
 wait_for_service backend 8000
+wait_for_service orchestrator 8000
 wait_for_service legacy 8080
 
 if [ "$seed" = "true" ]; then
   docker compose exec -T backend php artisan migrate:fresh --seed --force --no-interaction
+  docker compose exec -T orchestrator php artisan migrate --force --no-interaction
   docker compose exec -T legacy php artisan migrate:fresh --seed --force --no-interaction
 else
   docker compose exec -T backend php artisan migrate:fresh --force --no-interaction
+  docker compose exec -T orchestrator php artisan migrate --force --no-interaction
   docker compose exec -T legacy php artisan migrate:fresh --force --no-interaction
 fi
 
