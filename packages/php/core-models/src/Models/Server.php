@@ -9,6 +9,7 @@ use Illuminate\Database\Eloquent\Factories\Factory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Support\Facades\Config;
 use Interadigital\CoreModels\Database\Factories\ServerFactory;
 use Interadigital\CoreModels\Enums\ServerStatus;
@@ -46,6 +47,11 @@ class Server extends Model
     public function referralcode(): BelongsTo
     {
         return $this->belongsTo(ReferralCode::class, 'referral_id', 'id');
+    }
+
+    public function events(): HasMany
+    {
+        return $this->hasMany(ServerEvent::class, 'server_id', 'id');
     }
 
     public function data(): Attribute
