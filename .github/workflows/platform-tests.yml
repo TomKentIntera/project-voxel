@@ -1,0 +1,103 @@
+name: Platform Tests
+
+on:
+  pull_request:
+    paths:
+      - "platform/backend/**"
+      - "platform/frontend/**"
+      - "packages/php/core-models/**"
+      - ".github/workflows/platform-tests.yml"
+  push:
+    paths:
+      - "platform/backend/**"
+      - "platform/frontend/**"
+      - "packages/php/core-models/**"
+      - ".github/workflows/platform-tests.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: platform-tests-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  backend-unit-tests:
+    name: Backend Unit Tests
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: platform/backend
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: "8.2"
+          extensions: mbstring, pdo_sqlite, sqlite3
+          coverage: none
+
+      - name: Install backend dependencies
+        run: composer install --no-interaction --no-progress --prefer-dist
+
+      - name: Prepare backend environment
+        run: |
+          cp .env.example .env
+          php artisan key:generate --ansi
+
+      - name: Run backend unit tests
+        run: php artisan test --testsuite=Unit --colors=always
+
+  backend-api-tests:
+    name: Backend API Tests
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: platform/backend
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: "8.2"
+          extensions: mbstring, pdo_sqlite, sqlite3
+          coverage: none
+
+      - name: Install backend dependencies
+        run: composer install --no-interaction --no-progress --prefer-dist
+
+      - name: Prepare backend environment
+        run: |
+          cp .env.example .env
+          php artisan key:generate --ansi
+
+      - name: Run backend API tests
+        run: php artisan test --testsuite=Feature --filter=Api --colors=always
+
+  frontend-tests:
+    name: Frontend Tests
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: platform/frontend
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: platform/frontend/package-lock.json
+
+      - name: Install frontend dependencies
+        run: npm ci
+
+      - name: Run frontend tests
+        run: npm test
