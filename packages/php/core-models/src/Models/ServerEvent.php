@@ -9,6 +9,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Interadigital\CoreModels\Database\Factories\ServerEventFactory;
+use Interadigital\CoreModels\Enums\ServerEventType;
 
 class ServerEvent extends Model
 {
@@ -46,6 +47,17 @@ class ServerEvent extends Model
     public function actor(): BelongsTo
     {
         return $this->belongsTo(User::class, 'actor_id', 'id');
+    }
+
+    public function typeEnum(): ?ServerEventType
+    {
+        $type = $this->getAttribute('type');
+
+        if (! is_string($type)) {
+            return null;
+        }
+
+        return ServerEventType::tryFrom($type);
     }
 
     protected static function newFactory(): Factory

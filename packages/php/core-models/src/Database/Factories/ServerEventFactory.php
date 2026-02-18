@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Interadigital\CoreModels\Database\Factories;
 
 use Illuminate\Database\Eloquent\Factories\Factory;
+use Interadigital\CoreModels\Enums\ServerEventType;
 use Interadigital\CoreModels\Models\Server;
 use Interadigital\CoreModels\Models\ServerEvent;
 use Interadigital\CoreModels\Models\User;
@@ -31,11 +32,7 @@ class ServerEventFactory extends Factory
         return [
             'server_id' => Server::factory(),
             'actor_id' => User::factory(),
-            'type' => fake()->randomElement([
-                'server.provisioned',
-                'server.cancelled',
-                'server.suspended',
-            ]),
+            'type' => fake()->randomElement(ServerEventType::cases())->value,
             'meta' => [
                 'source' => fake()->randomElement(['api', 'dashboard', 'system']),
             ],
