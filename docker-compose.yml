@@ -57,6 +57,29 @@ services:
     networks:
       - platform
 
+  orchestrator:
+    build:
+      context: .
+      dockerfile: platform/orchestrator/docker/Dockerfile
+    working_dir: /var/www/html
+    volumes:
+      - ./platform/orchestrator:/var/www/html
+      - ./packages:/var/packages:ro
+      - orchestrator_vendor:/var/www/html/vendor
+    command: ["web"]
+    expose:
+      - "8000"
+    depends_on:
+      mysql:
+        condition: service_healthy
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.orchestrator.rule=Host(`orchestrator.localhost`)
+      - traefik.http.routers.orchestrator.entrypoints=web
+      - traefik.http.services.orchestrator.loadbalancer.server.port=8000
+    networks:
+      - platform
+
   frontend:
     image: node:22-alpine
     working_dir: /app
@@ -130,6 +153,7 @@ services:
       - --entrypoints.web.address=:80
     depends_on:
       - backend
+      - orchestrator
       - frontend
       - legacy
     ports:
@@ -145,5 +169,6 @@ networks:
 volumes:
   mysql_data:
   backend_vendor:
+  orchestrator_vendor:
   frontend_node_modules:
   legacy_vendor:
