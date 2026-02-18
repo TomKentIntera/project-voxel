@@ -17,14 +17,40 @@ on:
 
 permissions:
   contents: read
+  pull-requests: read
 
 concurrency:
   group: platform-tests-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
+  detect-changes:
+    name: Detect Changed Areas
+    runs-on: ubuntu-latest
+    outputs:
+      backend: ${{ steps.filter.outputs.backend }}
+      frontend: ${{ steps.filter.outputs.frontend }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Detect changed paths
+        id: filter
+        uses: dorny/paths-filter@v3
+        with:
+          filters: |
+            backend:
+              - 'platform/backend/**'
+              - 'packages/php/core-models/**'
+              - '.github/workflows/platform-tests.yml'
+            frontend:
+              - 'platform/frontend/**'
+              - '.github/workflows/platform-tests.yml'
+
   backend-unit-tests:
     name: Backend Unit Tests
+    needs: detect-changes
+    if: ${{ github.event_name == 'workflow_dispatch' || needs.detect-changes.outputs.backend == 'true' }}
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -53,6 +79,8 @@ jobs:
 
   backend-api-tests:
     name: Backend API Tests
+    needs: detect-changes
+    if: ${{ github.event_name == 'workflow_dispatch' || needs.detect-changes.outputs.backend == 'true' }}
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -81,6 +109,8 @@ jobs:
 
   frontend-tests:
     name: Frontend Tests
+    needs: detect-changes
+    if: ${{ github.event_name == 'workflow_dispatch' || needs.detect-changes.outputs.frontend == 'true' }}
     runs-on: ubuntu-latest
     defaults:
       run:
