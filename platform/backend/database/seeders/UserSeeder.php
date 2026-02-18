@@ -7,6 +7,7 @@ namespace Database\Seeders;
 use Illuminate\Database\Console\Seeds\WithoutModelEvents;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\Hash;
+use Interadigital\CoreModels\Enums\UserRole;
 use Interadigital\CoreModels\Models\User;
 
 class UserSeeder extends Seeder
@@ -26,6 +27,7 @@ class UserSeeder extends Seeder
             'name' => 'Admin User',
             'email' => 'admin@test.com',
             'password' => Hash::make('password'),
+            'role' => UserRole::ADMIN->value,
         ]);
 
         // A secondary known test user for multi-user scenarios.
@@ -36,6 +38,7 @@ class UserSeeder extends Seeder
             'name' => 'Test User',
             'email' => 'test@test.com',
             'password' => Hash::make('password'),
+            'role' => UserRole::CUSTOMER->value,
         ]);
 
         // Generate a handful of random users for realistic data.
