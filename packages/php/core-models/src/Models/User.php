@@ -69,6 +69,14 @@ class User extends Authenticatable
         return $this->hasMany(Server::class, 'user_id', 'id');
     }
 
+    /**
+     * @return HasMany<ServerEvent, $this>
+     */
+    public function actedServerEvents(): HasMany
+    {
+        return $this->hasMany(ServerEvent::class, 'actor_id', 'id');
+    }
+
     protected static function newFactory(): Factory
     {
         return UserFactory::new();
