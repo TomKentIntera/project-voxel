@@ -59,6 +59,49 @@ class AuthController extends Controller
         return response()->json($this->authPayload($user));
     }
 
+    public function refresh(Request $request): JsonResponse
+    {
+        $validated = $request->validate([
+            'refresh_token' => ['required', 'string'],
+        ]);
+
+        $rawRefreshToken = $validated['refresh_token'];
+
+        $userId = $this->jwtService->userIdFromRefreshToken($rawRefreshToken);
+
+        if ($userId === null) {
+            return response()->json([
+                'message' => 'Invalid or expired refresh token.',
+            ], Response::HTTP_UNAUTHORIZED);
+        }
+
+        $user = User::find($userId);
+
+        if ($user === null) {
+            return response()->json([
+                'message' => 'Invalid or expired refresh token.',
+            ], Response::HTTP_UNAUTHORIZED);
+        }
+
+        // Rotate: revoke the old refresh token, issue a fresh pair.
+        $this->jwtService->revokeRefreshToken($rawRefreshToken);
+
+        return response()->json($this->authPayload($user));
+    }
+
+    public function logout(Request $request): JsonResponse
+    {
+        $validated = $request->validate([
+            'refresh_token' => ['required', 'string'],
+        ]);
+
+        $this->jwtService->revokeRefreshToken($validated['refresh_token']);
+
+        return response()->json([
+            'message' => 'Logged out.',
+        ]);
+    }
+
     public function me(Request $request): JsonResponse
     {
         return response()->json([
@@ -71,10 +114,14 @@ class AuthController extends Controller
      */
     private function authPayload(User $user): array
     {
+        $expiresInSeconds = $this->jwtService->ttlMinutes() * 60;
+
         return [
             'token' => $this->jwtService->issueToken($user),
+            'refresh_token' => $this->jwtService->issueRefreshToken($user),
             'token_type' => 'Bearer',
-            'expires_in' => max(1, (int) config('jwt.ttl', 60 * 24 * 7)) * 60,
+            'expires_in' => $expiresInSeconds,
+            'expires_at' => time() + $expiresInSeconds,
             'user' => $user,
         ];
     }

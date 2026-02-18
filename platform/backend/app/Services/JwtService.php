@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use Illuminate\Support\Str;
+use Interadigital\CoreModels\Models\AuthToken;
 use Interadigital\CoreModels\Models\User;
 use RuntimeException;
 
@@ -10,6 +11,13 @@ class JwtService
 {
     private const ALGORITHM = 'HS256';
 
+    private const TYPE_ACCESS = 'access';
+
+    private const TYPE_REFRESH = 'refresh';
+
+    /**
+     * Issue a short-lived access token for the given user.
+     */
     public function issueToken(User $user): string
     {
         $issuedAt = time();
@@ -17,6 +25,7 @@ class JwtService
 
         $payload = [
             'sub' => $user->getKey(),
+            'type' => self::TYPE_ACCESS,
             'iat' => $issuedAt,
             'exp' => $expiresAt,
         ];
@@ -24,15 +33,117 @@ class JwtService
         return $this->encode($payload);
     }
 
+    /**
+     * Issue a long-lived refresh token for the given user and persist its
+     * hash in the database so it can be revoked later.
+     */
+    public function issueRefreshToken(User $user): string
+    {
+        $issuedAt = time();
+        $refreshTtlSeconds = $this->refreshTtlMinutes() * 60;
+        $expiresAt = $issuedAt + $refreshTtlSeconds;
+
+        $payload = [
+            'sub' => $user->getKey(),
+            'type' => self::TYPE_REFRESH,
+            'jti' => Str::random(32),
+            'iat' => $issuedAt,
+            'exp' => $expiresAt,
+        ];
+
+        $rawToken = $this->encode($payload);
+
+        AuthToken::create([
+            'user_id' => $user->getKey(),
+            'token_hash' => AuthToken::hashToken($rawToken),
+            'expires_at' => now()->addSeconds($refreshTtlSeconds),
+        ]);
+
+        return $rawToken;
+    }
+
+    /**
+     * Resolve a user ID from a valid access token.
+     */
     public function userIdFromToken(string $token): ?int
     {
         $payload = $this->decode($token);
 
-        if (! is_array($payload) || ! isset($payload['sub']) || ! is_numeric($payload['sub'])) {
+        if ($payload === null) {
+            return null;
+        }
+
+        // Only accept access tokens (or legacy tokens without a type claim).
+        $type = $payload['type'] ?? self::TYPE_ACCESS;
+        if ($type !== self::TYPE_ACCESS) {
+            return null;
+        }
+
+        if (! isset($payload['sub']) || ! is_numeric($payload['sub'])) {
             return null;
         }
 
         return (int) $payload['sub'];
+    }
+
+    /**
+     * Validate a refresh token against both the JWT signature/expiry and the
+     * database. Returns the user ID if valid, null otherwise.
+     */
+    public function userIdFromRefreshToken(string $token): ?int
+    {
+        $payload = $this->decode($token);
+
+        if ($payload === null) {
+            return null;
+        }
+
+        if (($payload['type'] ?? null) !== self::TYPE_REFRESH) {
+            return null;
+        }
+
+        if (! isset($payload['sub']) || ! is_numeric($payload['sub'])) {
+            return null;
+        }
+
+        // Verify the token exists in the database and has not been revoked.
+        $authToken = AuthToken::where('token_hash', AuthToken::hashToken($token))->first();
+
+        if ($authToken === null || ! $authToken->isActive()) {
+            return null;
+        }
+
+        return (int) $payload['sub'];
+    }
+
+    /**
+     * Revoke a refresh token so it can no longer be used.
+     */
+    public function revokeRefreshToken(string $token): void
+    {
+        $authToken = AuthToken::where('token_hash', AuthToken::hashToken($token))->first();
+
+        $authToken?->revoke();
+    }
+
+    /**
+     * Revoke all active refresh tokens for a user (e.g. on logout-everywhere).
+     */
+    public function revokeAllRefreshTokens(User $user): void
+    {
+        AuthToken::where('user_id', $user->getKey())
+            ->whereNull('revoked_at')
+            ->update(['revoked_at' => now()]);
+    }
+
+    /**
+     * Return the access-token TTL in minutes.
+     */
+    public function ttlMinutes(): int
+    {
+        $ttl = config('jwt.ttl', 60 * 24 * 7);
+
+        return max(1, (int) $ttl);
     }
 
     /**
@@ -159,9 +270,9 @@ class JwtService
         throw new RuntimeException('JWT signing secret is not configured.');
     }
 
-    private function ttlMinutes(): int
+    private function refreshTtlMinutes(): int
     {
-        $ttl = config('jwt.ttl', 60 * 24 * 7);
+        $ttl = config('jwt.refresh_ttl', 60 * 24 * 30);
 
         return max(1, (int) $ttl);
     }

@@ -1,20 +1,16 @@
 <?php
 
-declare(strict_types=1);
+namespace App\Models;
 
-namespace Interadigital\CoreModels\Models;
-
-use Illuminate\Database\Eloquent\Factories\Factory;
+// use Illuminate\Contracts\Auth\MustVerifyEmail;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
-use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
-use Interadigital\CoreModels\Database\Factories\UserFactory;
 
 class User extends Authenticatable
 {
-    use HasFactory;
-    use Notifiable;
+    /** @use HasFactory<\Database\Factories\UserFactory> */
+    use HasFactory, Notifiable;
 
     /**
      * The attributes that are mass assignable.
@@ -51,26 +47,5 @@ class User extends Authenticatable
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
         ];
-    }
-
-    /**
-     * @return HasMany<AuthToken, $this>
-     */
-    public function authTokens(): HasMany
-    {
-        return $this->hasMany(AuthToken::class);
-    }
-
-    /**
-     * @return HasMany<Server, $this>
-     */
-    public function servers(): HasMany
-    {
-        return $this->hasMany(Server::class, 'user_id', 'id');
-    }
-
-    protected static function newFactory(): Factory
-    {
-        return UserFactory::new();
     }
 }

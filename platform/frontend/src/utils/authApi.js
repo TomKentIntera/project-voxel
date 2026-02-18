@@ -24,6 +24,20 @@ export function loginUser(payload) {
   })
 }
 
+export function refreshAuthToken(refreshToken) {
+  return apiRequest('/api/auth/refresh', {
+    method: 'POST',
+    body: { refresh_token: refreshToken },
+  })
+}
+
+export function logoutUser(refreshToken) {
+  return apiRequest('/api/auth/logout', {
+    method: 'POST',
+    body: { refresh_token: refreshToken },
+  })
+}
+
 export function fetchCurrentUser(token) {
   return apiRequest('/api/auth/me', {
     token,
