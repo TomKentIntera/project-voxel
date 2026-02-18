@@ -118,6 +118,9 @@ export function AuthProvider({ children }) {
   )
 
   // Hydrate user from stored token on mount.
+  // If the access token is expired (or has no recorded expiry), attempt a
+  // refresh first. If the refresh fails, clear the session so the user is
+  // sent back to the login screen.
   useEffect(() => {
     if (!token) {
       return
@@ -125,27 +128,66 @@ export function AuthProvider({ children }) {
 
     let isCancelled = false
 
-    fetchCurrentUser(token)
-      .then((response) => {
+    const storedExpiresAt = getStoredExpiresAt()
+    const nowSeconds = Math.floor(Date.now() / 1000)
+    const accessTokenExpired = !storedExpiresAt || storedExpiresAt <= nowSeconds
+
+    const hydrate = async () => {
+      try {
+        let activeToken = token
+
+        if (accessTokenExpired) {
+          const storedRefreshToken = getStoredRefreshToken()
+
+          if (!storedRefreshToken) {
+            // No refresh token available — can't recover the session.
+            if (!isCancelled) clearSession()
+            return
+          }
+
+          try {
+            const refreshResponse = await refreshAuthToken(storedRefreshToken)
+            if (isCancelled) return
+
+            // Persist the new token set and update state.
+            persistTokens(
+              refreshResponse.token,
+              refreshResponse.refresh_token,
+              refreshResponse.expires_at,
+            )
+            setUser(refreshResponse.user)
+            scheduleRefresh(refreshResponse.expires_at, refreshResponse.refresh_token)
+            return // hydration complete — user is set from the refresh response
+          } catch {
+            // Refresh failed — session is unrecoverable.
+            if (!isCancelled) clearSession()
+            return
+          }
+        }
+
+        // Access token is still valid — fetch the current user.
+        const response = await fetchCurrentUser(activeToken)
         if (!isCancelled) {
           setUser(response.user)
         }
-      })
-      .catch(() => {
+      } catch {
         if (!isCancelled) {
           clearSession()
         }
-      })
-      .finally(() => {
+      } finally {
         if (!isCancelled) {
           setIsHydrating(false)
         }
-      })
+      }
+    }
+
+    hydrate()
 
     return () => {
       isCancelled = true
     }
-  }, [clearSession, token])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   // Whenever the token/expiry change, (re-)schedule the silent refresh.
   useEffect(() => {
