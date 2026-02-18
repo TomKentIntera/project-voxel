@@ -6,12 +6,6 @@ on:
       - "platform/backend/**"
       - "packages/php/core-models/**"
       - ".github/workflows/backend-tests.yml"
-  push:
-    paths:
-      - "platform/backend/**"
-      - "packages/php/core-models/**"
-      - ".github/workflows/backend-tests.yml"
-  workflow_dispatch:
 
 permissions:
   contents: read
