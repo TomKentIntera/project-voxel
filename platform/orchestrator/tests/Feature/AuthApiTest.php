@@ -11,7 +11,11 @@ class AuthApiTest extends TestCase
 {
     use RefreshDatabase;
 
-    public function test_user_can_register_and_receive_a_jwt(): void
+    // ---------------------------------------------------------------
+    // Registration (blocked on the orchestrator)
+    // ---------------------------------------------------------------
+
+    public function test_registration_is_forbidden(): void
     {
         $response = $this->postJson('/api/auth/register', [
             'username' => 'alex-example',
@@ -21,35 +25,23 @@ class AuthApiTest extends TestCase
             'email' => 'alex@example.com',
             'password' => 'secret1234',
             'password_confirmation' => 'secret1234',
-            'role' => 'admin',
         ]);
 
         $response
-            ->assertCreated()
-            ->assertJsonStructure([
-                'token',
-                'refresh_token',
-                'token_type',
-                'expires_in',
-                'expires_at',
-                'user' => ['id', 'name', 'email', 'role'],
+            ->assertForbidden()
+            ->assertJson([
+                'message' => 'Registration is not available on this service.',
             ]);
-
-        $response->assertJsonPath('user.role', 'customer');
-
-        $this->assertDatabaseHas('users', [
-            'email' => 'alex@example.com',
-            'role' => 'customer',
-        ]);
-
-        // Refresh token should be persisted in the database.
-        $this->assertDatabaseCount('auth_tokens', 1);
     }
 
-    public function test_user_can_log_in_and_receive_a_jwt(): void
+    // ---------------------------------------------------------------
+    // Login — admin users
+    // ---------------------------------------------------------------
+
+    public function test_admin_user_can_log_in_and_receive_a_jwt(): void
     {
-        $user = User::factory()->create([
-            'email' => 'alex@example.com',
+        $user = User::factory()->admin()->create([
+            'email' => 'admin@example.com',
             'password' => 'secret1234',
         ]);
 
@@ -70,20 +62,43 @@ class AuthApiTest extends TestCase
             ])
             ->assertJsonPath('user.id', $user->id)
             ->assertJsonPath('user.email', $user->email)
-            ->assertJsonPath('user.role', 'customer');
+            ->assertJsonPath('user.role', 'admin');
 
         $this->assertDatabaseCount('auth_tokens', 1);
     }
 
-    public function test_user_cannot_log_in_with_invalid_credentials(): void
+    // ---------------------------------------------------------------
+    // Login — non-admin users are rejected
+    // ---------------------------------------------------------------
+
+    public function test_customer_user_cannot_log_in(): void
     {
-        User::factory()->create([
-            'email' => 'alex@example.com',
+        $user = User::factory()->customer()->create([
+            'email' => 'customer@example.com',
             'password' => 'secret1234',
         ]);
 
         $response = $this->postJson('/api/auth/login', [
-            'email' => 'alex@example.com',
+            'email' => $user->email,
+            'password' => 'secret1234',
+        ]);
+
+        $response
+            ->assertForbidden()
+            ->assertJson([
+                'message' => 'Access denied. Administrator privileges required.',
+            ]);
+    }
+
+    public function test_user_cannot_log_in_with_invalid_credentials(): void
+    {
+        User::factory()->admin()->create([
+            'email' => 'admin@example.com',
+            'password' => 'secret1234',
+        ]);
+
+        $response = $this->postJson('/api/auth/login', [
+            'email' => 'admin@example.com',
             'password' => 'wrong-password',
         ]);
 
@@ -94,16 +109,20 @@ class AuthApiTest extends TestCase
             ]);
     }
 
+    // ---------------------------------------------------------------
+    // /me endpoint
+    // ---------------------------------------------------------------
+
     public function test_me_endpoint_requires_a_valid_jwt(): void
     {
         $this->getJson('/api/auth/me')
             ->assertUnauthorized();
     }
 
-    public function test_authenticated_user_can_fetch_profile_with_jwt(): void
+    public function test_authenticated_admin_can_fetch_profile_with_jwt(): void
     {
-        $user = User::factory()->create([
-            'email' => 'alex@example.com',
+        $user = User::factory()->admin()->create([
+            'email' => 'admin@example.com',
             'password' => 'secret1234',
         ]);
 
@@ -121,10 +140,14 @@ class AuthApiTest extends TestCase
             ->assertJsonPath('user.email', $user->email);
     }
 
-    public function test_refresh_token_returns_new_token_pair(): void
+    // ---------------------------------------------------------------
+    // Refresh tokens
+    // ---------------------------------------------------------------
+
+    public function test_refresh_token_returns_new_token_pair_for_admin(): void
     {
-        $user = User::factory()->create([
-            'email' => 'alex@example.com',
+        $user = User::factory()->admin()->create([
+            'email' => 'admin@example.com',
             'password' => 'secret1234',
         ]);
 
@@ -173,8 +196,8 @@ class AuthApiTest extends TestCase
 
     public function test_refresh_rejects_access_token(): void
     {
-        $user = User::factory()->create([
-            'email' => 'alex@example.com',
+        $user = User::factory()->admin()->create([
+            'email' => 'admin@example.com',
             'password' => 'secret1234',
         ]);
 
@@ -198,8 +221,8 @@ class AuthApiTest extends TestCase
 
     public function test_refresh_token_cannot_be_used_as_bearer(): void
     {
-        $user = User::factory()->create([
-            'email' => 'alex@example.com',
+        $user = User::factory()->admin()->create([
+            'email' => 'admin@example.com',
             'password' => 'secret1234',
         ]);
 
@@ -217,8 +240,8 @@ class AuthApiTest extends TestCase
 
     public function test_revoked_refresh_token_cannot_be_reused(): void
     {
-        $user = User::factory()->create([
-            'email' => 'alex@example.com',
+        $user = User::factory()->admin()->create([
+            'email' => 'admin@example.com',
             'password' => 'secret1234',
         ]);
 
@@ -242,8 +265,8 @@ class AuthApiTest extends TestCase
 
     public function test_logout_revokes_refresh_token(): void
     {
-        $user = User::factory()->create([
-            'email' => 'alex@example.com',
+        $user = User::factory()->admin()->create([
+            'email' => 'admin@example.com',
             'password' => 'secret1234',
         ]);
 

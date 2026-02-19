@@ -1,6 +1,6 @@
 <?php
 
-use App\Http\Controllers\AuthController;
+use Interadigital\CoreAuth\Http\Controllers\AuthController;
 use App\Http\Controllers\BannerController;
 use App\Http\Controllers\FaqController;
 use App\Http\Controllers\PlanController;

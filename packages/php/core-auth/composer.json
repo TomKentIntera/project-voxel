@@ -1,0 +1,27 @@
+{
+    "name": "interadigital/core-auth",
+    "description": "Shared JWT authentication for Interadigital Laravel applications.",
+    "license": "proprietary",
+    "type": "library",
+    "version": "1.0.0",
+    "require": {
+        "php": "^8.2",
+        "interadigital/core-models": "^1.0",
+        "laravel/framework": "^12.0"
+    },
+    "autoload": {
+        "psr-4": {
+            "Interadigital\\CoreAuth\\": "src/"
+        }
+    },
+    "extra": {
+        "laravel": {
+            "providers": [
+                "Interadigital\\CoreAuth\\CoreAuthServiceProvider"
+            ]
+        }
+    },
+    "minimum-stability": "stable",
+    "prefer-stable": true
+}
+

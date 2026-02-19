@@ -1,7 +1,7 @@
 <?php
 
-use App\Console\Commands\PurgeExpiredAuthTokens;
-use App\Http\Middleware\AuthenticateWithJwt;
+use Interadigital\CoreAuth\Console\Commands\PurgeExpiredAuthTokens;
+use Interadigital\CoreAuth\Http\Middleware\AuthenticateWithJwt;
 use Illuminate\Console\Scheduling\Schedule;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;

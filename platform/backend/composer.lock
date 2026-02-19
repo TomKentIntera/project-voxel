@@ -4,7 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "a8e5e44160e0041e09d3b493e7004255",
+    "content-hash": "f3ddf807e1db9e6ce50100657426b6cc",
     "packages": [
         {
             "name": "brick/math",
@@ -1051,6 +1051,41 @@
                 }
             ],
             "time": "2025-08-22T14:27:06+00:00"
+        },
+        {
+            "name": "interadigital/core-auth",
+            "version": "1.0.0",
+            "dist": {
+                "type": "path",
+                "url": "../../packages/php/core-auth",
+                "reference": "b992579950d6b14dc210178cb18b9250b7f06298"
+            },
+            "require": {
+                "interadigital/core-models": "^1.0",
+                "laravel/framework": "^12.0",
+                "php": "^8.2"
+            },
+            "type": "library",
+            "extra": {
+                "laravel": {
+                    "providers": [
+                        "Interadigital\\CoreAuth\\CoreAuthServiceProvider"
+                    ]
+                }
+            },
+            "autoload": {
+                "psr-4": {
+                    "Interadigital\\CoreAuth\\": "src/"
+                }
+            },
+            "license": [
+                "proprietary"
+            ],
+            "description": "Shared JWT authentication for Interadigital Laravel applications.",
+            "transport-options": {
+                "symlink": true,
+                "relative": true
+            }
         },
         {
             "name": "interadigital/core-models",
@@ -8421,12 +8456,12 @@
     ],
     "aliases": [],
     "minimum-stability": "stable",
-    "stability-flags": [],
+    "stability-flags": {},
     "prefer-stable": true,
     "prefer-lowest": false,
     "platform": {
         "php": "^8.2"
     },
-    "platform-dev": [],
-    "plugin-api-version": "2.6.0"
+    "platform-dev": {},
+    "plugin-api-version": "2.9.0"
 }
