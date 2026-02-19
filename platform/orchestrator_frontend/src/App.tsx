@@ -7,6 +7,7 @@ import DashboardPage from './pages/DashboardPage'
 import UsersPage from './pages/UsersPage'
 import UserProfilePage from './pages/UserProfilePage'
 import ServersPage from './pages/ServersPage'
+import ServerProfilePage from './pages/ServerProfilePage'
 import JobsPage from './pages/JobsPage'
 
 function App() {
@@ -25,6 +26,7 @@ function App() {
           <Route path="users" element={<UsersPage />} />
           <Route path="users/:id" element={<UserProfilePage />} />
           <Route path="servers" element={<ServersPage />} />
+          <Route path="servers/:id" element={<ServerProfilePage />} />
           <Route path="jobs" element={<JobsPage />} />
         </Route>
         <Route path="*" element={<Navigate to="/" replace />} />

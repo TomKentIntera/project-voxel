@@ -19,6 +19,7 @@ Route::prefix('auth')->group(function (): void {
 
 Route::middleware(['auth.jwt', 'admin'])->group(function (): void {
     Route::get('/servers', [ServerController::class, 'index']);
+    Route::get('/servers/{id}', [ServerController::class, 'show']);
     Route::get('/metrics', [MetricsController::class, 'index']);
     Route::get('/users', [UserController::class, 'index']);
     Route::get('/users/{id}', [UserController::class, 'show']);
