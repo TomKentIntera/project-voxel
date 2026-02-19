@@ -10,6 +10,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Interadigital\CoreModels\Database\Factories\UserFactory;
+use Interadigital\CoreModels\Enums\UserRole;
 
 class User extends Authenticatable
 {
@@ -28,6 +29,7 @@ class User extends Authenticatable
         'name',
         'email',
         'password',
+        'role',
     ];
 
     /**
@@ -50,7 +52,33 @@ class User extends Authenticatable
         return [
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
+            'role' => UserRole::class,
         ];
+    }
+
+    public function roleEnum(): ?UserRole
+    {
+        $role = $this->getAttribute('role');
+
+        if ($role instanceof UserRole) {
+            return $role;
+        }
+
+        if (! is_string($role)) {
+            return null;
+        }
+
+        return UserRole::tryFrom($role);
+    }
+
+    public function isAdmin(): bool
+    {
+        return $this->roleEnum() === UserRole::ADMIN;
+    }
+
+    public function isCustomer(): bool
+    {
+        return $this->roleEnum() === UserRole::CUSTOMER;
     }
 
     /**

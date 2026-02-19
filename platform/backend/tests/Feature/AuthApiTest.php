@@ -21,6 +21,7 @@ class AuthApiTest extends TestCase
             'email' => 'alex@example.com',
             'password' => 'secret1234',
             'password_confirmation' => 'secret1234',
+            'role' => 'admin',
         ]);
 
         $response
@@ -31,11 +32,14 @@ class AuthApiTest extends TestCase
                 'token_type',
                 'expires_in',
                 'expires_at',
-                'user' => ['id', 'name', 'email'],
+                'user' => ['id', 'name', 'email', 'role'],
             ]);
+
+        $response->assertJsonPath('user.role', 'customer');
 
         $this->assertDatabaseHas('users', [
             'email' => 'alex@example.com',
+            'role' => 'customer',
         ]);
 
         // Refresh token should be persisted in the database.
@@ -62,10 +66,11 @@ class AuthApiTest extends TestCase
                 'token_type',
                 'expires_in',
                 'expires_at',
-                'user' => ['id', 'email'],
+                'user' => ['id', 'email', 'role'],
             ])
             ->assertJsonPath('user.id', $user->id)
-            ->assertJsonPath('user.email', $user->email);
+            ->assertJsonPath('user.email', $user->email)
+            ->assertJsonPath('user.role', 'customer');
 
         $this->assertDatabaseCount('auth_tokens', 1);
     }

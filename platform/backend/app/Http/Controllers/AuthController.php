@@ -7,6 +7,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Validation\Rule;
+use Interadigital\CoreModels\Enums\UserRole;
 use Interadigital\CoreModels\Models\User;
 use Symfony\Component\HttpFoundation\Response;
 
@@ -33,6 +34,7 @@ class AuthController extends Controller
             'name' => $validated['first_name'] . ' ' . $validated['last_name'],
             'email' => $validated['email'],
             'password' => $validated['password'],
+            'role' => UserRole::CUSTOMER->value,
         ]);
 
         return response()->json(
