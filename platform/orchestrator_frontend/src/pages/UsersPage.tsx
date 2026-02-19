@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { Link } from 'react-router-dom'
 import Header from '../components/Header'
 import Pagination from '../components/Pagination'
 import { useUsers } from '../hooks/useUsers'
@@ -88,6 +89,9 @@ export default function UsersPage() {
                 <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-slate-500">
                   Joined
                 </th>
+                <th className="px-6 py-3 text-right text-xs font-medium uppercase tracking-wider text-slate-500">
+                  <span className="sr-only">Actions</span>
+                </th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
@@ -109,12 +113,15 @@ export default function UsersPage() {
                     <td className="px-6 py-4">
                       <div className="h-4 w-24 animate-pulse rounded bg-slate-200" />
                     </td>
+                    <td className="px-6 py-4">
+                      <div className="ml-auto h-4 w-12 animate-pulse rounded bg-slate-200" />
+                    </td>
                   </tr>
                 ))
               ) : users.length === 0 ? (
                 <tr>
                   <td
-                    colSpan={4}
+                    colSpan={5}
                     className="px-6 py-12 text-center text-sm text-slate-500"
                   >
                     No users found.
@@ -154,6 +161,18 @@ export default function UsersPage() {
                         month: 'short',
                         day: 'numeric',
                       })}
+                    </td>
+                    <td className="whitespace-nowrap px-6 py-4 text-right">
+                      <Link
+                        to={`/users/${user.id}`}
+                        title="View profile"
+                        className="inline-flex rounded-lg p-2 text-slate-400 transition-colors hover:bg-slate-100 hover:text-indigo-600"
+                      >
+                        <svg className="size-5" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M2.036 12.322a1.012 1.012 0 0 1 0-.639C3.423 7.51 7.36 4.5 12 4.5c4.638 0 8.573 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.638 0-8.573-3.007-9.963-7.178Z" />
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z" />
+                        </svg>
+                      </Link>
                     </td>
                   </tr>
                 ))

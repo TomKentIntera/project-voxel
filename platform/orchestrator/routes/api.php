@@ -21,6 +21,7 @@ Route::middleware(['auth.jwt', 'admin'])->group(function (): void {
     Route::get('/servers', [ServerController::class, 'index']);
     Route::get('/metrics', [MetricsController::class, 'index']);
     Route::get('/users', [UserController::class, 'index']);
+    Route::get('/users/{id}', [UserController::class, 'show']);
 });
 
 Route::get('/banner', [BannerController::class, 'index']);

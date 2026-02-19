@@ -46,3 +46,26 @@ export function fetchUsers(
   return apiRequest<UsersResponse>(`/api/users${qs ? `?${qs}` : ''}`, { token })
 }
 
+export interface UserServer {
+  id: number
+  uuid: string | null
+  status: string | null
+  plan: string | null
+  created_at: string
+}
+
+export interface UserProfile extends UserItem {
+  servers: UserServer[]
+}
+
+interface UserProfileResponse {
+  data: UserProfile
+}
+
+export function fetchUser(
+  token: string,
+  id: number,
+): Promise<UserProfileResponse> {
+  return apiRequest<UserProfileResponse>(`/api/users/${id}`, { token })
+}
+

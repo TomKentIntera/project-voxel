@@ -68,5 +68,40 @@ class UserController extends Controller
             ],
         ]);
     }
+
+    /**
+     * Return a single user's profile with their servers.
+     */
+    public function show(int $id): JsonResponse
+    {
+        $user = User::withCount('servers')->with('servers')->find($id);
+
+        if ($user === null) {
+            return response()->json(['message' => 'User not found.'], 404);
+        }
+
+        $servers = $user->servers->map(fn ($server): array => [
+            'id' => $server->id,
+            'uuid' => $server->uuid,
+            'status' => $server->status,
+            'plan' => $server->plan,
+            'created_at' => $server->created_at?->toIso8601String(),
+        ]);
+
+        return response()->json([
+            'data' => [
+                'id' => $user->id,
+                'username' => $user->username,
+                'first_name' => $user->first_name,
+                'last_name' => $user->last_name,
+                'name' => $user->name,
+                'email' => $user->email,
+                'role' => $user->role instanceof UserRole ? $user->role->value : $user->role,
+                'servers_count' => $user->servers_count ?? 0,
+                'servers' => $servers,
+                'created_at' => $user->created_at?->toIso8601String(),
+            ],
+        ]);
+    }
 }
 

@@ -5,6 +5,7 @@ import Layout from './components/Layout'
 import LoginPage from './pages/LoginPage'
 import DashboardPage from './pages/DashboardPage'
 import UsersPage from './pages/UsersPage'
+import UserProfilePage from './pages/UserProfilePage'
 import ServersPage from './pages/ServersPage'
 import JobsPage from './pages/JobsPage'
 
@@ -22,6 +23,7 @@ function App() {
         >
           <Route index element={<DashboardPage />} />
           <Route path="users" element={<UsersPage />} />
+          <Route path="users/:id" element={<UserProfilePage />} />
           <Route path="servers" element={<ServersPage />} />
           <Route path="jobs" element={<JobsPage />} />
         </Route>
