@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Interadigital\CoreAuth\Services\JwtService;
 use Interadigital\CoreModels\Models\Server;
 use Interadigital\CoreModels\Models\ServerEvent;
 use Interadigital\CoreModels\Models\User;
@@ -11,6 +12,56 @@ use Tests\TestCase;
 class ServerApiTest extends TestCase
 {
     use RefreshDatabase;
+
+    public function test_admin_data_endpoints_require_a_valid_jwt(): void
+    {
+        $this->getJson('/api/servers')->assertUnauthorized();
+        $this->getJson('/api/servers/1')->assertUnauthorized();
+        $this->getJson('/api/metrics')->assertUnauthorized();
+        $this->getJson('/api/users')->assertUnauthorized();
+        $this->getJson('/api/users/1')->assertUnauthorized();
+    }
+
+    public function test_non_admin_jwt_cannot_access_admin_data_endpoints(): void
+    {
+        $customer = User::factory()->customer()->create();
+        $token = app(JwtService::class)->issueToken($customer);
+
+        $this->withHeader('Authorization', 'Bearer '.$token)
+            ->getJson('/api/servers')
+            ->assertForbidden()
+            ->assertJson([
+                'message' => 'Access denied. Administrator privileges required.',
+            ]);
+
+        $this->withHeader('Authorization', 'Bearer '.$token)
+            ->getJson('/api/servers/1')
+            ->assertForbidden()
+            ->assertJson([
+                'message' => 'Access denied. Administrator privileges required.',
+            ]);
+
+        $this->withHeader('Authorization', 'Bearer '.$token)
+            ->getJson('/api/metrics')
+            ->assertForbidden()
+            ->assertJson([
+                'message' => 'Access denied. Administrator privileges required.',
+            ]);
+
+        $this->withHeader('Authorization', 'Bearer '.$token)
+            ->getJson('/api/users')
+            ->assertForbidden()
+            ->assertJson([
+                'message' => 'Access denied. Administrator privileges required.',
+            ]);
+
+        $this->withHeader('Authorization', 'Bearer '.$token)
+            ->getJson('/api/users/1')
+            ->assertForbidden()
+            ->assertJson([
+                'message' => 'Access denied. Administrator privileges required.',
+            ]);
+    }
 
     public function test_admin_can_list_servers_with_filters_and_pagination(): void
     {
