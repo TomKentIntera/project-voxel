@@ -12,6 +12,18 @@ use Symfony\Component\HttpFoundation\Response;
 
 class RegionalProxyController extends Controller
 {
+    private const BINDING_KIND_GAME = 'game';
+
+    private const BINDING_KIND_SFTP = 'sftp';
+
+    /**
+     * @var list<string>
+     */
+    private const SUPPORTED_BINDING_KINDS = [
+        self::BINDING_KIND_GAME,
+        self::BINDING_KIND_SFTP,
+    ];
+
     /**
      * Paginated, searchable regional proxy listing.
      */
@@ -126,16 +138,25 @@ class RegionalProxyController extends Controller
         return $this->mappingResponseForProxy($regionalProxy);
     }
 
+    /**
+     * Return TCP proxy bindings for the authenticated regional proxy token.
+     */
+    public function bindings(Request $request): JsonResponse
+    {
+        $regionalProxy = $this->resolveRegionalProxyFromRequest($request);
+
+        if ($regionalProxy === null) {
+            return response()->json([
+                'message' => 'Unauthenticated.',
+            ], Response::HTTP_UNAUTHORIZED);
+        }
+
+        return $this->bindingResponseForProxy($regionalProxy);
+    }
+
     private function mappingResponseForProxy(RegionalProxy $regionalProxy): JsonResponse
     {
-        $now = now();
-
-        $regionalProxy->forceFill([
-            'last_active_at' => $now,
-            'last_used_at' => $now,
-        ])->save();
-
-        $regionalProxy->refresh();
+        $regionalProxy = $this->touchRegionalProxyActivity($regionalProxy);
 
         $mappings = $this->buildMappingsForRegion($regionalProxy->region);
 
@@ -148,6 +169,25 @@ class RegionalProxyController extends Controller
                 'count' => count($mappings),
             ],
         ]);
+    }
+
+    private function bindingResponseForProxy(RegionalProxy $regionalProxy): JsonResponse
+    {
+        $regionalProxy = $this->touchRegionalProxyActivity($regionalProxy);
+
+        return response()->json($this->buildBindingsForRegion($regionalProxy->region));
+    }
+
+    private function touchRegionalProxyActivity(RegionalProxy $regionalProxy): RegionalProxy
+    {
+        $now = now();
+
+        $regionalProxy->forceFill([
+            'last_active_at' => $now,
+            'last_used_at' => $now,
+        ])->save();
+
+        return $regionalProxy->refresh();
     }
 
     /**
@@ -178,6 +218,223 @@ class RegionalProxyController extends Controller
             ->filter(static fn (?array $mapping): bool => $mapping !== null)
             ->values()
             ->all();
+    }
+
+    /**
+     * @return list<array<string, mixed>>
+     */
+    private function buildBindingsForRegion(string $region): array
+    {
+        $bindings = [];
+
+        $servers = Server::query()
+            ->select(['id', 'uuid', 'config', 'updated_at'])
+            ->orderBy('id')
+            ->get();
+
+        foreach ($servers as $server) {
+            $config = $this->decodeServerConfig($server->config);
+            $serverRegion = $this->resolveServerRegionFromConfig($config);
+
+            if ($serverRegion !== $region) {
+                continue;
+            }
+
+            foreach ($this->extractBindingsFromConfig($config) as $rawBinding) {
+                $normalizedBinding = $this->normalizeBinding($rawBinding, $server);
+
+                if ($normalizedBinding !== null) {
+                    $bindings[] = $normalizedBinding;
+                }
+            }
+        }
+
+        usort($bindings, static function (array $left, array $right): int {
+            $kindComparison = strcmp((string) $left['kind'], (string) $right['kind']);
+
+            if ($kindComparison !== 0) {
+                return $kindComparison;
+            }
+
+            return ((int) $left['listen_port']) <=> ((int) $right['listen_port']);
+        });
+
+        return $bindings;
+    }
+
+    /**
+     * @param  array<string, mixed>  $config
+     * @return list<array<string, mixed>>
+     */
+    private function extractBindingsFromConfig(array $config): array
+    {
+        $bindings = [];
+
+        $this->appendBindingList($bindings, $config['proxy_bindings'] ?? null);
+        $this->appendBindingList($bindings, $config['bindings'] ?? null);
+
+        $proxyConfig = $config['proxy'] ?? null;
+
+        if (is_array($proxyConfig)) {
+            $this->appendBindingList($bindings, $proxyConfig['bindings'] ?? null);
+
+            $gameProxyConfig = $proxyConfig['game'] ?? null;
+            if (is_array($gameProxyConfig)) {
+                $bindings[] = [
+                    'kind' => self::BINDING_KIND_GAME,
+                    ...$gameProxyConfig,
+                ];
+            }
+
+            $sftpProxyConfig = $proxyConfig['sftp'] ?? null;
+            if (is_array($sftpProxyConfig)) {
+                $bindings[] = [
+                    'kind' => self::BINDING_KIND_SFTP,
+                    ...$sftpProxyConfig,
+                ];
+            }
+        }
+
+        $flatGameBinding = $this->buildFlatBindingFromConfig($config, self::BINDING_KIND_GAME);
+        if ($flatGameBinding !== null) {
+            $bindings[] = $flatGameBinding;
+        }
+
+        $flatSftpBinding = $this->buildFlatBindingFromConfig($config, self::BINDING_KIND_SFTP);
+        if ($flatSftpBinding !== null) {
+            $bindings[] = $flatSftpBinding;
+        }
+
+        return $bindings;
+    }
+
+    /**
+     * @param array<int, array<string, mixed>> $bindings
+     */
+    private function appendBindingList(array &$bindings, mixed $candidateBindings): void
+    {
+        if (! is_array($candidateBindings)) {
+            return;
+        }
+
+        foreach ($candidateBindings as $candidateBinding) {
+            if (is_array($candidateBinding)) {
+                $bindings[] = $candidateBinding;
+            }
+        }
+    }
+
+    /**
+     * @param  array<string, mixed>  $config
+     * @return array<string, mixed>|null
+     */
+    private function buildFlatBindingFromConfig(array $config, string $kind): ?array
+    {
+        if ($kind === self::BINDING_KIND_GAME) {
+            $listenPortKeys = ['game_listen_port', 'proxy_game_listen_port'];
+            $targetHostKeys = ['game_target_host', 'game_host', 'target_host', 'host', 'target_ip'];
+            $targetPortKeys = ['game_target_port', 'game_port', 'minecraft_port'];
+            $enabledKeys = ['game_enabled', 'proxy_game_enabled'];
+        } else {
+            $listenPortKeys = ['sftp_listen_port', 'proxy_sftp_listen_port'];
+            $targetHostKeys = ['sftp_target_host', 'sftp_host', 'target_host', 'host', 'target_ip'];
+            $targetPortKeys = ['sftp_target_port', 'sftp_port'];
+            $enabledKeys = ['sftp_enabled', 'proxy_sftp_enabled'];
+        }
+
+        $listenPort = $this->parsePort($this->firstConfigValue($config, $listenPortKeys));
+        $targetHostValue = $this->firstConfigValue($config, $targetHostKeys);
+        $targetPort = $this->parsePort($this->firstConfigValue($config, $targetPortKeys));
+        $enabledValue = $this->firstConfigValue($config, $enabledKeys);
+
+        $targetHost = is_string($targetHostValue) ? trim($targetHostValue) : '';
+
+        if ($listenPort === null || $targetPort === null || $targetHost === '') {
+            return null;
+        }
+
+        return [
+            'kind' => $kind,
+            'listen_port' => $listenPort,
+            'target_host' => $targetHost,
+            'target_port' => $targetPort,
+            'enabled' => $enabledValue ?? true,
+        ];
+    }
+
+    /**
+     * @param  array<string, mixed>  $config
+     * @param  list<string>  $keys
+     */
+    private function firstConfigValue(array $config, array $keys): mixed
+    {
+        foreach ($keys as $key) {
+            if (array_key_exists($key, $config)) {
+                return $config[$key];
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * @param  array<string, mixed>  $rawBinding
+     * @return array<string, mixed>|null
+     */
+    private function normalizeBinding(array $rawBinding, Server $server): ?array
+    {
+        $kind = strtolower(trim((string) ($rawBinding['kind'] ?? '')));
+
+        if (! in_array($kind, self::SUPPORTED_BINDING_KINDS, true)) {
+            return null;
+        }
+
+        $listenPort = $this->parsePort($rawBinding['listen_port'] ?? null);
+        $targetPort = $this->parsePort($rawBinding['target_port'] ?? null);
+        $targetHost = trim((string) ($rawBinding['target_host'] ?? ''));
+
+        if ($listenPort === null || $targetPort === null || $targetHost === '') {
+            return null;
+        }
+
+        $updatedAt = $rawBinding['updated_at'] ?? null;
+        if (! is_string($updatedAt) || trim($updatedAt) === '') {
+            $updatedAt = $server->updated_at?->toIso8601String() ?? now()->toIso8601String();
+        } else {
+            $updatedAt = trim($updatedAt);
+        }
+
+        return [
+            'kind' => $kind,
+            'listen_port' => $listenPort,
+            'target_host' => $targetHost,
+            'target_port' => $targetPort,
+            'enabled' => array_key_exists('enabled', $rawBinding) ? (bool) $rawBinding['enabled'] : true,
+            'updated_at' => $updatedAt,
+        ];
+    }
+
+    private function parsePort(mixed $value): ?int
+    {
+        if (is_int($value)) {
+            $port = $value;
+        } elseif (is_string($value)) {
+            $trimmed = trim($value);
+
+            if ($trimmed === '' || ! ctype_digit($trimmed)) {
+                return null;
+            }
+
+            $port = (int) $trimmed;
+        } else {
+            return null;
+        }
+
+        if ($port < 1 || $port > 65535) {
+            return null;
+        }
+
+        return $port;
     }
 
     /**
