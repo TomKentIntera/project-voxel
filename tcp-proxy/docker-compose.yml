@@ -1,0 +1,21 @@
+services:
+  tcp-proxy:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: tcp-proxy
+    restart: unless-stopped
+    environment:
+      ORCH_BASE_URL: ${ORCH_BASE_URL}
+      ORCH_TOKEN: ${ORCH_TOKEN}
+      PROXY_ID: ${PROXY_ID:-local-dev-proxy}
+      PROXY_REGION: ${PROXY_REGION:-local}
+      POLL_INTERVAL_SECONDS: ${POLL_INTERVAL_SECONDS:-15}
+      GAME_LISTEN_RANGE: ${GAME_LISTEN_RANGE:-25565-25665}
+      SFTP_LISTEN_RANGE: ${SFTP_LISTEN_RANGE:-30500-31000}
+      HAPROXY_CFG: /etc/haproxy/haproxy.cfg
+      HAPROXY_PIDFILE: /run/haproxy.pid
+      STATE_DIR: /var/lib/proxy-sync
+    ports:
+      - "25565-25665:25565-25665/tcp"
+      - "30500-31000:30500-31000/tcp"
