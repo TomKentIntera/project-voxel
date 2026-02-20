@@ -27,6 +27,10 @@ class PterodactylHelper {
         return env('PTERO_API');
     }
 
+    public static function panel() {
+        return rtrim((string) env('PTERO_PANEL', ''), '/');
+    }
+
     public static function apiKey() {
         return env('PTERO_API_KEY');
     }
@@ -37,6 +41,70 @@ class PterodactylHelper {
             'Accept' => 'application/json',
             'Content-Type' => 'application/json'
         ];
+    }
+
+    public static function getServerByPteroID($id) {
+        if($id == null || $id === '') {
+            return null;
+        }
+
+        $response = Http::withHeaders(PterodactylHelper::defaultHeaders())->get(PterodactylHelper::api().'/application/servers/'.$id);
+        if(!$response->successful()) {
+            return null;
+        }
+
+        return $response->json();
+    }
+
+    public static function getServerByExternalID($externalID) {
+        if($externalID == null || $externalID === '') {
+            return null;
+        }
+
+        $response = Http::withHeaders(PterodactylHelper::defaultHeaders())->get(PterodactylHelper::api().'/application/servers', [
+            'filter' => [
+                'external_id' => $externalID,
+            ],
+        ]);
+
+        if(!$response->successful()) {
+            return null;
+        }
+
+        $serverResults = $response->json('data', []);
+        foreach($serverResults as $serverResult) {
+            if(
+                isset($serverResult['attributes']['external_id']) &&
+                $serverResult['attributes']['external_id'] === $externalID
+            ) {
+                return $serverResult;
+            }
+        }
+
+        return null;
+    }
+
+    public static function getPanelURLForServer(Server $server) {
+        $panelURL = PterodactylHelper::panel();
+        if($panelURL == '') {
+            return null;
+        }
+
+        $panelServer = PterodactylHelper::getServerByPteroID($server->ptero_id);
+        if($panelServer == null) {
+            $panelServer = PterodactylHelper::getServerByExternalID($server->uuid);
+
+            if($panelServer != null && isset($panelServer['attributes']['id'])) {
+                $server->ptero_id = strval($panelServer['attributes']['id']);
+                $server->save();
+            }
+        }
+
+        if($panelServer != null && isset($panelServer['attributes']['identifier'])) {
+            return $panelURL.'/server/'.$panelServer['attributes']['identifier'];
+        }
+
+        return $panelURL;
     }
 
     public static function getLocations($includeNodes = false) {
@@ -312,6 +380,7 @@ class PterodactylHelper {
         $initialisationData = [
             "name" => $serverData->name,
             "user" => $panelUser['id'],
+            "external_id" => $server->uuid,
             "egg" => $egg['id'],
             "docker_image" => $dockerImage,
             "startup" => $egg['startup'],
@@ -340,9 +409,23 @@ class PterodactylHelper {
 
         $json = $response->json();
 
+        if(!$response->successful() || !isset($json['attributes']['id'])) {
+            PterodactylHelper::logToSlack("Unable to create server when initialising", json_encode($json));
+            Log::error('Pterodactyl server creation failed', [
+                'server_uuid' => $server->uuid,
+                'response_status' => $response->status(),
+                'response_body' => $json,
+            ]);
+
+            return [
+                'result' => 'failed',
+            ];
+        }
+
         //dd($response->json());
         //PterodactylHelper::logToSlack("Got response from Pterodactyl",json_encode($json));
 
+        $server->ptero_id = strval($json['attributes']['id']);
         $server->initialised = true;
         $server->save();
 
