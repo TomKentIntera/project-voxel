@@ -44,11 +44,14 @@ For local compose runs, these are prefilled in `.env`.
 
 Worker polling request:
 
-- `GET {ORCH_BASE_URL}/internal/proxy-bindings`
+- `GET {ORCH_BASE_URL}/api/internal/proxy-bindings`
 - Headers:
   - `Authorization: Bearer {ORCH_TOKEN}`
   - `X-Proxy-Id: {PROXY_ID}`
   - `X-Proxy-Region: {PROXY_REGION}`
+
+For backward compatibility, the worker also retries `.../internal/proxy-bindings`
+and `.../api/regional-proxies/mappings` when the preferred endpoint returns `404`.
 
 Response body: JSON list of bindings:
 

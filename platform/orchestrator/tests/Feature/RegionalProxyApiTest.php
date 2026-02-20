@@ -120,6 +120,108 @@ class RegionalProxyApiTest extends TestCase
             ]);
     }
 
+    public function test_proxy_bindings_endpoint_requires_valid_regional_proxy_token(): void
+    {
+        $this->getJson('/api/internal/proxy-bindings')
+            ->assertUnauthorized()
+            ->assertJson([
+                'message' => 'Unauthenticated.',
+            ]);
+
+        $this->withHeader('Authorization', 'Bearer invalid-token')
+            ->getJson('/api/internal/proxy-bindings')
+            ->assertUnauthorized()
+            ->assertJson([
+                'message' => 'Unauthenticated.',
+            ]);
+    }
+
+    public function test_regional_proxy_can_fetch_bindings_for_its_region(): void
+    {
+        ['regionalProxy' => $regionalProxy, 'rawToken' => $rawToken] = $this->createRegionalProxyWithRawToken([
+            'name' => 'Germany Binding Edge',
+            'region' => 'eu.de',
+            'last_active_at' => null,
+        ]);
+
+        Server::factory()->create([
+            'uuid' => 'srv-eu-binding',
+            'config' => json_encode([
+                'location' => 'de',
+                'proxy_bindings' => [
+                    [
+                        'kind' => 'game',
+                        'listen_port' => 25565,
+                        'target_host' => 'mc-eu.internal',
+                        'target_port' => 25565,
+                        'enabled' => true,
+                    ],
+                    [
+                        'kind' => 'sftp',
+                        'listen_port' => 30500,
+                        'target_host' => 'sftp-eu.internal',
+                        'target_port' => 2022,
+                        'enabled' => true,
+                    ],
+                ],
+            ]),
+        ]);
+
+        Server::factory()->create([
+            'uuid' => 'srv-fi-binding',
+            'config' => json_encode([
+                'location' => 'fi',
+                'proxy_bindings' => [
+                    [
+                        'kind' => 'game',
+                        'listen_port' => 25570,
+                        'target_host' => 'mc-fi.internal',
+                        'target_port' => 25565,
+                        'enabled' => true,
+                    ],
+                ],
+            ]),
+        ]);
+
+        $response = $this->withHeader('Authorization', 'Bearer '.$rawToken)
+            ->getJson('/api/internal/proxy-bindings');
+
+        $response->assertOk()
+            ->assertJsonCount(2)
+            ->assertJsonPath('0.kind', 'game')
+            ->assertJsonPath('0.listen_port', 25565)
+            ->assertJsonPath('0.target_host', 'mc-eu.internal')
+            ->assertJsonPath('0.target_port', 25565)
+            ->assertJsonPath('1.kind', 'sftp')
+            ->assertJsonPath('1.listen_port', 30500)
+            ->assertJsonPath('1.target_host', 'sftp-eu.internal')
+            ->assertJsonPath('1.target_port', 2022)
+            ->assertJsonMissing([
+                'target_host' => 'mc-fi.internal',
+            ])
+            ->assertJsonStructure([
+                '*' => [
+                    'kind',
+                    'listen_port',
+                    'target_host',
+                    'target_port',
+                    'enabled',
+                    'updated_at',
+                ],
+            ]);
+
+        $this->withHeader('Authorization', 'Bearer '.$rawToken.'-tampered')
+            ->getJson('/api/internal/proxy-bindings')
+            ->assertUnauthorized()
+            ->assertJson([
+                'message' => 'Unauthenticated.',
+            ]);
+
+        $regionalProxy->refresh();
+        $this->assertNotNull($regionalProxy->last_active_at);
+        $this->assertNotNull($regionalProxy->last_used_at);
+    }
+
     public function test_regional_proxy_can_fetch_region_mappings_and_updates_last_active(): void
     {
         ['regionalProxy' => $regionalProxy, 'rawToken' => $rawToken] = $this->createRegionalProxyWithRawToken([

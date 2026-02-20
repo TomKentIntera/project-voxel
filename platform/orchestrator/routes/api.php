@@ -21,6 +21,7 @@ Route::prefix('auth')->group(function (): void {
 });
 
 Route::middleware(['regional-proxy.auth'])->group(function (): void {
+    Route::get('/internal/proxy-bindings', [RegionalProxyController::class, 'bindings']);
     Route::get('/regional-proxies/mappings', [RegionalProxyController::class, 'mappings']);
     Route::get('/regional-proxies/{id}/mappings', [RegionalProxyController::class, 'mappingsById'])
         ->whereNumber('id');

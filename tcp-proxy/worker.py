@@ -10,7 +10,7 @@ import time
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional
 
 import requests
 
@@ -19,6 +19,11 @@ REQUIRED_ENV_VARS = ("ORCH_BASE_URL", "ORCH_TOKEN", "PROXY_ID", "PROXY_REGION")
 KIND_GAME = "game"
 KIND_SFTP = "sftp"
 SUPPORTED_KINDS = (KIND_GAME, KIND_SFTP)
+BINDINGS_ENDPOINT_PATHS = (
+    "/api/internal/proxy-bindings",
+    "/internal/proxy-bindings",
+    "/api/regional-proxies/mappings",
+)
 
 
 @dataclass(frozen=True)
@@ -195,19 +200,72 @@ def load_config() -> Config:
     )
 
 
+def build_bindings_endpoint_urls(base_url: str) -> List[str]:
+    urls: List[str] = []
+    normalized_base = base_url.rstrip("/")
+
+    for path in BINDINGS_ENDPOINT_PATHS:
+        resolved_path = path
+        if normalized_base.endswith("/api") and path.startswith("/api/"):
+            resolved_path = path[len("/api") :]
+        url = f"{normalized_base}{resolved_path}"
+        if url not in urls:
+            urls.append(url)
+
+    return urls
+
+
+def extract_bindings_payload(payload: Any) -> List[dict]:
+    if isinstance(payload, list):
+        return payload
+
+    if not isinstance(payload, dict):
+        raise ValueError("Orchestrator response must be an object or list")
+
+    candidates: List[Any] = [
+        payload.get("bindings"),
+        payload.get("mappings"),
+    ]
+
+    data = payload.get("data")
+    if isinstance(data, dict):
+        candidates.extend(
+            [
+                data.get("bindings"),
+                data.get("mappings"),
+            ]
+        )
+
+    for candidate in candidates:
+        if isinstance(candidate, list):
+            return candidate
+
+    raise ValueError("Orchestrator response did not contain a bindings list")
+
+
 def fetch_bindings(config: Config) -> List[dict]:
-    url = f"{config.orch_base_url}/internal/proxy-bindings"
     headers = {
         "Authorization": f"Bearer {config.orch_token}",
         "X-Proxy-Id": config.proxy_id,
         "X-Proxy-Region": config.proxy_region,
     }
-    resp = requests.get(url, headers=headers, timeout=10)
-    resp.raise_for_status()
-    payload = resp.json()
-    if not isinstance(payload, list):
-        raise ValueError("Orchestrator response must be a list")
-    return payload
+    urls = build_bindings_endpoint_urls(config.orch_base_url)
+    last_404_url: Optional[str] = None
+
+    for url in urls:
+        resp = requests.get(url, headers=headers, timeout=10)
+        if resp.status_code == 404:
+            last_404_url = url
+            continue
+
+        resp.raise_for_status()
+        payload = resp.json()
+        return extract_bindings_payload(payload)
+
+    raise RuntimeError(
+        "No bindings endpoint found. Last attempted URL returned 404: "
+        f"{last_404_url or 'unknown'}"
+    )
 
 
 def normalize_bindings(payload: List[dict]) -> Dict[str, List[Binding]]:
