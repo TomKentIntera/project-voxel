@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Interadigital\CoreModels\Models\RegionalProxy;
+use Interadigital\CoreModels\Models\Server;
 use Interadigital\CoreModels\Models\User;
 use Tests\TestCase;
 
@@ -29,6 +30,7 @@ class RegionalProxyApiTest extends TestCase
                     'id',
                     'name',
                     'region',
+                    'last_active_at',
                     'last_used_at',
                     'created_at',
                     'updated_at',
@@ -100,6 +102,107 @@ class RegionalProxyApiTest extends TestCase
             ->assertJson([
                 'message' => 'Regional proxy not found.',
             ]);
+    }
+
+    public function test_mappings_endpoint_requires_valid_regional_proxy_token(): void
+    {
+        $this->getJson('/api/regional-proxies/mappings')
+            ->assertUnauthorized()
+            ->assertJson([
+                'message' => 'Unauthenticated.',
+            ]);
+
+        $this->withHeader('Authorization', 'Bearer invalid-token')
+            ->getJson('/api/regional-proxies/mappings')
+            ->assertUnauthorized()
+            ->assertJson([
+                'message' => 'Unauthenticated.',
+            ]);
+    }
+
+    public function test_regional_proxy_can_fetch_region_mappings_and_updates_last_active(): void
+    {
+        ['regionalProxy' => $regionalProxy, 'rawToken' => $rawToken] = $this->createRegionalProxyWithRawToken([
+            'name' => 'Germany Edge',
+            'region' => 'eu.de',
+            'last_active_at' => null,
+        ]);
+
+        $matchingServer = Server::factory()->create([
+            'uuid' => 'srv-eu-match',
+            'ptero_id' => '111',
+            'config' => json_encode([
+                'location' => 'de',
+                'name' => 'EU Match',
+            ]),
+        ]);
+
+        Server::factory()->create([
+            'uuid' => 'srv-eu-miss',
+            'ptero_id' => '222',
+            'config' => json_encode([
+                'location' => 'fi',
+                'name' => 'EU Miss',
+            ]),
+        ]);
+
+        $response = $this->withHeader('Authorization', 'Bearer '.$rawToken)
+            ->getJson('/api/regional-proxies/mappings');
+
+        $response->assertOk()
+            ->assertJsonPath('data.regional_proxy.id', $regionalProxy->id)
+            ->assertJsonPath('data.regional_proxy.region', 'eu.de')
+            ->assertJsonPath('meta.count', 1)
+            ->assertJsonPath('data.mappings.0.server_id', $matchingServer->id)
+            ->assertJsonPath('data.mappings.0.server_uuid', 'srv-eu-match')
+            ->assertJsonPath('data.mappings.0.region', 'eu.de');
+
+        $regionalProxy->refresh();
+        $this->assertNotNull($regionalProxy->last_active_at);
+        $this->assertNotNull($regionalProxy->last_used_at);
+    }
+
+    public function test_mappings_by_id_rejects_token_for_different_proxy(): void
+    {
+        ['regionalProxy' => $regionalProxy, 'rawToken' => $rawToken] = $this->createRegionalProxyWithRawToken([
+            'name' => 'Token Owner',
+            'region' => 'eu.de',
+        ]);
+
+        ['regionalProxy' => $otherProxy] = $this->createRegionalProxyWithRawToken([
+            'name' => 'Other Proxy',
+            'region' => 'eu.de',
+        ]);
+
+        $this->withHeader('Authorization', 'Bearer '.$rawToken)
+            ->getJson('/api/regional-proxies/'.$otherProxy->id.'/mappings')
+            ->assertForbidden()
+            ->assertJson([
+                'message' => 'Access denied for the requested regional proxy.',
+            ]);
+
+        $this->withHeader('Authorization', 'Bearer '.$rawToken)
+            ->getJson('/api/regional-proxies/'.$regionalProxy->id.'/mappings')
+            ->assertOk();
+    }
+
+    /**
+     * @param  array<string, mixed>  $attributes
+     * @return array{regionalProxy: RegionalProxy, rawToken: string}
+     */
+    private function createRegionalProxyWithRawToken(array $attributes = []): array
+    {
+        $rawToken = RegionalProxy::generateToken();
+
+        $regionalProxy = RegionalProxy::factory()->create([
+            ...$attributes,
+            'token_hash' => RegionalProxy::hashToken($rawToken),
+        ]);
+
+        return [
+            'regionalProxy' => $regionalProxy,
+            'rawToken' => $rawToken,
+        ];
     }
 
     private function authenticateAdmin(): string

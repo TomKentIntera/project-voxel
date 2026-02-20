@@ -28,6 +28,7 @@ class RegionalProxyFactory extends Factory
             'name' => $this->faker->unique()->words(2, true).' proxy',
             'region' => $this->faker->randomElement(['eu.de', 'us.east', 'us.west', 'ap.southeast']),
             'token_hash' => RegionalProxy::hashToken($rawToken),
+            'last_active_at' => null,
             'last_used_at' => null,
         ];
     }

@@ -1,6 +1,7 @@
 <?php
 
 use Interadigital\CoreAuth\Console\Commands\PurgeExpiredAuthTokens;
+use App\Http\Middleware\AuthenticateRegionalProxyToken;
 use App\Http\Middleware\EnsureUserIsAdmin;
 use Interadigital\CoreAuth\Http\Middleware\AuthenticateWithJwt;
 use Illuminate\Console\Scheduling\Schedule;
@@ -19,6 +20,7 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->alias([
             'auth.jwt' => AuthenticateWithJwt::class,
             'admin' => EnsureUserIsAdmin::class,
+            'regional-proxy.auth' => AuthenticateRegionalProxyToken::class,
         ]);
     })
     ->withSchedule(function (Schedule $schedule): void {
