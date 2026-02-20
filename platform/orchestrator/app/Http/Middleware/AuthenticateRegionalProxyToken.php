@@ -24,7 +24,7 @@ class AuthenticateRegionalProxyToken
 
         $regionalProxy = RegionalProxy::where('token_hash', RegionalProxy::hashToken($token))->first();
 
-        if (! $regionalProxy instanceof RegionalProxy || ! $regionalProxy->matchesToken($token)) {
+        if (! ($regionalProxy instanceof RegionalProxy) || ! $regionalProxy->matchesToken($token)) {
             return $this->unauthenticatedResponse();
         }
 
