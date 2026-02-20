@@ -18,6 +18,7 @@ Each public port maps to exactly one backend `target_host:target_port`.
 - `entrypoint.sh`
 - `worker.py`
 - `docker-compose.yml` (example)
+- `.env` (committed local defaults for compose + worker)
 
 ## Environment variables
 
@@ -36,6 +37,8 @@ Each public port maps to exactly one backend `target_host:target_port`.
 - `HAPROXY_CFG` (default: `/etc/haproxy/haproxy.cfg`)
 - `HAPROXY_PIDFILE` (default: `/run/haproxy.pid`)
 - `STATE_DIR` (default: `/var/lib/proxy-sync`)
+
+For local compose runs, these are prefilled in `.env`.
 
 ## Orchestrator API contract
 
@@ -100,12 +103,9 @@ From this directory:
 docker compose up --build
 ```
 
-Example with explicit env vars:
+Edit `.env` first if you need to change orchestrator URL/token, proxy metadata, or published port ranges.
 
-```bash
-ORCH_BASE_URL=http://localhost:8080 \
-ORCH_TOKEN=dev-token \
-PROXY_ID=local-dev-proxy \
-PROXY_REGION=local \
-docker compose up --build
-```
+Key compose variables in `.env`:
+
+- `GAME_PORT_PUBLISH` (default `25565-25665:25565-25665/tcp`)
+- `SFTP_PORT_PUBLISH` (default `30500-31000:30500-31000/tcp`)
