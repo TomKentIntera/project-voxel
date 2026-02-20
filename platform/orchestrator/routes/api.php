@@ -20,6 +20,12 @@ Route::prefix('auth')->group(function (): void {
     });
 });
 
+Route::middleware(['regional-proxy.auth'])->group(function (): void {
+    Route::get('/regional-proxies/mappings', [RegionalProxyController::class, 'mappings']);
+    Route::get('/regional-proxies/{id}/mappings', [RegionalProxyController::class, 'mappingsById'])
+        ->whereNumber('id');
+});
+
 Route::middleware(['auth.jwt', 'admin'])->group(function (): void {
     Route::get('/servers', [ServerController::class, 'index']);
     Route::get('/servers/{id}', [ServerController::class, 'show']);

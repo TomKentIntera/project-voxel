@@ -23,6 +23,7 @@ class RegionalProxy extends Model
         'name',
         'region',
         'token_hash',
+        'last_active_at',
         'last_used_at',
     ];
 
@@ -41,6 +42,7 @@ class RegionalProxy extends Model
     protected function casts(): array
     {
         return [
+            'last_active_at' => 'datetime',
             'last_used_at' => 'datetime',
         ];
     }
