@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Interadigital\CoreAuth\Services\JwtService;
 use Interadigital\CoreModels\Models\AuthToken;
 use Interadigital\CoreModels\Models\User;
 use Tests\TestCase;
@@ -140,11 +141,24 @@ class AuthApiTest extends TestCase
             ->assertJsonPath('user.email', $user->email);
     }
 
+    public function test_me_endpoint_rejects_non_admin_jwt_users(): void
+    {
+        $customer = User::factory()->customer()->create();
+        $token = app(JwtService::class)->issueToken($customer);
+
+        $this->withHeader('Authorization', 'Bearer '.$token)
+            ->getJson('/api/auth/me')
+            ->assertForbidden()
+            ->assertJson([
+                'message' => 'Access denied. Administrator privileges required.',
+            ]);
+    }
+
     // ---------------------------------------------------------------
     // Refresh tokens
     // ---------------------------------------------------------------
 
-    public function test_refresh_token_returns_new_token_pair_for_admin(): void
+    public function test_refresh_endpoint_requires_a_valid_jwt(): void
     {
         $user = User::factory()->admin()->create([
             'email' => 'admin@example.com',
@@ -158,9 +172,47 @@ class AuthApiTest extends TestCase
 
         $refreshToken = $loginResponse->json('refresh_token');
 
-        $response = $this->postJson('/api/auth/refresh', [
+        $this->postJson('/api/auth/refresh', [
             'refresh_token' => $refreshToken,
+        ])->assertUnauthorized();
+    }
+
+    public function test_refresh_endpoint_rejects_non_admin_jwt_users(): void
+    {
+        $customer = User::factory()->customer()->create();
+        $jwtService = app(JwtService::class);
+
+        $accessToken = $jwtService->issueToken($customer);
+        $refreshToken = $jwtService->issueRefreshToken($customer);
+
+        $this->withHeader('Authorization', 'Bearer '.$accessToken)
+            ->postJson('/api/auth/refresh', [
+                'refresh_token' => $refreshToken,
+            ])->assertForbidden()
+            ->assertJson([
+                'message' => 'Access denied. Administrator privileges required.',
+            ]);
+    }
+
+    public function test_refresh_token_returns_new_token_pair_for_admin(): void
+    {
+        $user = User::factory()->admin()->create([
+            'email' => 'admin@example.com',
+            'password' => 'secret1234',
         ]);
+
+        $loginResponse = $this->postJson('/api/auth/login', [
+            'email' => $user->email,
+            'password' => 'secret1234',
+        ]);
+
+        $accessToken = $loginResponse->json('token');
+        $refreshToken = $loginResponse->json('refresh_token');
+
+        $response = $this->withHeader('Authorization', 'Bearer '.$accessToken)
+            ->postJson('/api/auth/refresh', [
+                'refresh_token' => $refreshToken,
+            ]);
 
         $response
             ->assertOk()
@@ -183,9 +235,22 @@ class AuthApiTest extends TestCase
 
     public function test_refresh_rejects_invalid_token(): void
     {
-        $response = $this->postJson('/api/auth/refresh', [
-            'refresh_token' => 'not-a-valid-token',
+        $user = User::factory()->admin()->create([
+            'email' => 'admin@example.com',
+            'password' => 'secret1234',
         ]);
+
+        $loginResponse = $this->postJson('/api/auth/login', [
+            'email' => $user->email,
+            'password' => 'secret1234',
+        ]);
+
+        $accessToken = $loginResponse->json('token');
+
+        $response = $this->withHeader('Authorization', 'Bearer '.$accessToken)
+            ->postJson('/api/auth/refresh', [
+                'refresh_token' => 'not-a-valid-token',
+            ]);
 
         $response
             ->assertUnauthorized()
@@ -208,9 +273,10 @@ class AuthApiTest extends TestCase
 
         $accessToken = $loginResponse->json('token');
 
-        $response = $this->postJson('/api/auth/refresh', [
-            'refresh_token' => $accessToken,
-        ]);
+        $response = $this->withHeader('Authorization', 'Bearer '.$accessToken)
+            ->postJson('/api/auth/refresh', [
+                'refresh_token' => $accessToken,
+            ]);
 
         $response
             ->assertUnauthorized()
@@ -253,17 +319,22 @@ class AuthApiTest extends TestCase
         $refreshToken = $loginResponse->json('refresh_token');
 
         // First refresh succeeds and rotates the token.
-        $this->postJson('/api/auth/refresh', [
-            'refresh_token' => $refreshToken,
-        ])->assertOk();
+        $firstRefreshResponse = $this->withHeader('Authorization', 'Bearer '.$loginResponse->json('token'))
+            ->postJson('/api/auth/refresh', [
+                'refresh_token' => $refreshToken,
+            ]);
+
+        $firstRefreshResponse->assertOk();
+        $newAccessToken = (string) $firstRefreshResponse->json('token');
 
         // Second refresh with the same (now-revoked) token should fail.
-        $this->postJson('/api/auth/refresh', [
-            'refresh_token' => $refreshToken,
-        ])->assertUnauthorized();
+        $this->withHeader('Authorization', 'Bearer '.$newAccessToken)
+            ->postJson('/api/auth/refresh', [
+                'refresh_token' => $refreshToken,
+            ])->assertUnauthorized();
     }
 
-    public function test_logout_revokes_refresh_token(): void
+    public function test_logout_requires_a_valid_jwt(): void
     {
         $user = User::factory()->admin()->create([
             'email' => 'admin@example.com',
@@ -279,12 +350,54 @@ class AuthApiTest extends TestCase
 
         $this->postJson('/api/auth/logout', [
             'refresh_token' => $refreshToken,
-        ])->assertOk()
+        ])->assertUnauthorized();
+    }
+
+    public function test_logout_rejects_non_admin_jwt_users(): void
+    {
+        $customer = User::factory()->customer()->create();
+        $jwtService = app(JwtService::class);
+
+        $accessToken = $jwtService->issueToken($customer);
+        $refreshToken = $jwtService->issueRefreshToken($customer);
+
+        $this->withHeader('Authorization', 'Bearer '.$accessToken)
+            ->postJson('/api/auth/logout', [
+                'refresh_token' => $refreshToken,
+            ])->assertForbidden()
+            ->assertJson([
+                'message' => 'Access denied. Administrator privileges required.',
+            ]);
+    }
+
+    public function test_logout_revokes_refresh_token(): void
+    {
+        $user = User::factory()->admin()->create([
+            'email' => 'admin@example.com',
+            'password' => 'secret1234',
+        ]);
+
+        $loginResponse = $this->postJson('/api/auth/login', [
+            'email' => $user->email,
+            'password' => 'secret1234',
+        ]);
+
+        $refreshToken = $loginResponse->json('refresh_token');
+        $accessToken = $loginResponse->json('token');
+
+        $this->withHeader('Authorization', 'Bearer '.$accessToken)
+            ->postJson('/api/auth/logout', [
+                'refresh_token' => $refreshToken,
+            ])->assertOk()
           ->assertJson(['message' => 'Logged out.']);
 
         // The refresh token should no longer work.
-        $this->postJson('/api/auth/refresh', [
-            'refresh_token' => $refreshToken,
-        ])->assertUnauthorized();
+        $this->withHeader('Authorization', 'Bearer '.$accessToken)
+            ->postJson('/api/auth/refresh', [
+                'refresh_token' => $refreshToken,
+            ])->assertUnauthorized()
+            ->assertJson([
+                'message' => 'Invalid or expired refresh token.',
+            ]);
     }
 }

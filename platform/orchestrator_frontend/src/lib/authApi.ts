@@ -38,17 +38,20 @@ export function loginUser(payload: {
 
 export function refreshAuthToken(
   refreshToken: string,
+  token: string,
 ): Promise<AuthResponse> {
   return apiRequest<AuthResponse>('/api/auth/refresh', {
     method: 'POST',
     body: { refresh_token: refreshToken },
+    token,
   })
 }
 
-export function logoutUser(refreshToken: string): Promise<unknown> {
+export function logoutUser(refreshToken: string, token: string): Promise<unknown> {
   return apiRequest('/api/auth/logout', {
     method: 'POST',
     body: { refresh_token: refreshToken },
+    token,
   })
 }
 

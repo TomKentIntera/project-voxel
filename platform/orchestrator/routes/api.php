@@ -12,9 +12,11 @@ use Illuminate\Support\Facades\Route;
 Route::prefix('auth')->group(function (): void {
     Route::post('/register', [AdminAuthController::class, 'register']);
     Route::post('/login', [AdminAuthController::class, 'login']);
-    Route::post('/refresh', [AdminAuthController::class, 'refresh']);
-    Route::post('/logout', [AdminAuthController::class, 'logout']);
-    Route::middleware('auth.jwt')->get('/me', [AdminAuthController::class, 'me']);
+    Route::middleware(['auth.jwt', 'admin'])->group(function (): void {
+        Route::post('/refresh', [AdminAuthController::class, 'refresh']);
+        Route::post('/logout', [AdminAuthController::class, 'logout']);
+        Route::get('/me', [AdminAuthController::class, 'me']);
+    });
 });
 
 Route::middleware(['auth.jwt', 'admin'])->group(function (): void {

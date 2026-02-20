@@ -106,13 +106,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   // Schedule a silent refresh before the access token expires.
   const scheduleRefresh = useCallback(
-    (currentExpiresAt: number | null, currentRefreshToken: string | null) => {
+    (
+      currentExpiresAt: number | null,
+      currentRefreshToken: string | null,
+      currentToken: string | null,
+    ) => {
       if (refreshTimerRef.current) {
         clearTimeout(refreshTimerRef.current)
         refreshTimerRef.current = null
       }
 
-      if (!currentExpiresAt || !currentRefreshToken) {
+      if (!currentExpiresAt || !currentRefreshToken || !currentToken) {
         return
       }
 
@@ -123,14 +127,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
       refreshTimerRef.current = setTimeout(async () => {
         try {
-          const response = await refreshAuthToken(currentRefreshToken)
+          const response = await refreshAuthToken(currentRefreshToken, currentToken)
           persistTokens(
             response.token,
             response.refresh_token,
             response.expires_at,
           )
           setUser(response.user)
-          scheduleRefresh(response.expires_at, response.refresh_token)
+          scheduleRefresh(response.expires_at, response.refresh_token, response.token)
         } catch {
           clearSession()
         }
@@ -157,14 +161,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         if (accessTokenExpired) {
           const storedRefreshToken = getStoredRefreshToken()
 
-          if (!storedRefreshToken) {
+          if (!storedRefreshToken || !token) {
             if (!isCancelled) clearSession()
             return
           }
 
           try {
-            const refreshResponse =
-              await refreshAuthToken(storedRefreshToken)
+            const refreshResponse = await refreshAuthToken(storedRefreshToken, token)
             if (isCancelled) return
 
             persistTokens(
@@ -176,6 +179,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             scheduleRefresh(
               refreshResponse.expires_at,
               refreshResponse.refresh_token,
+              refreshResponse.token,
             )
             return
           } catch {
@@ -210,7 +214,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   // Whenever the token/expiry change, (re-)schedule the silent refresh.
   useEffect(() => {
-    scheduleRefresh(expiresAt, refreshToken)
+    scheduleRefresh(expiresAt, refreshToken, token)
 
     return () => {
       if (refreshTimerRef.current) {
@@ -218,7 +222,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         refreshTimerRef.current = null
       }
     }
-  }, [expiresAt, refreshToken, scheduleRefresh])
+  }, [expiresAt, refreshToken, scheduleRefresh, token])
 
   const login = useCallback(
     async (credentials: { email: string; password: string }) => {
@@ -235,15 +239,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   )
 
   const logout = useCallback(() => {
+    const currentToken = token
     const currentRefreshToken = refreshToken
     clearSession()
 
-    if (currentRefreshToken) {
-      logoutUser(currentRefreshToken).catch(() => {
+    if (currentRefreshToken && currentToken) {
+      logoutUser(currentRefreshToken, currentToken).catch(() => {
         // Best-effort; the local session is already cleared.
       })
     }
-  }, [clearSession, refreshToken])
+  }, [clearSession, refreshToken, token])
 
   const value = useMemo(
     () => ({
