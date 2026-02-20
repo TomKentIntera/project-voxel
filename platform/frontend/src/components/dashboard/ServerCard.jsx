@@ -1,4 +1,8 @@
+import { useState } from 'react'
 import { Link } from 'react-router-dom'
+import { useAuth } from '../../context/useAuth'
+import { fetchServerPanelUrl } from '../../utils/serversApi'
+import { getErrorMessage } from '../../utils/getErrorMessage'
 
 /**
  * Displays a single server in the client dashboard.
@@ -7,6 +11,10 @@ import { Link } from 'react-router-dom'
  * @param {object} props.server - Server data from the API
  */
 export default function ServerCard({ server }) {
+  const { token } = useAuth()
+  const [isOpeningPanel, setIsOpeningPanel] = useState(false)
+  const [panelError, setPanelError] = useState('')
+
   const createdDate = server.created_at
     ? new Date(server.created_at).toISOString().split('T')[0]
     : '—'
@@ -17,6 +25,24 @@ export default function ServerCard({ server }) {
 
   const isSuspended = server.suspended
   const isPaid = server.stripe_tx_return
+
+  async function handleOpenPanel() {
+    if (!token || isOpeningPanel) {
+      return
+    }
+
+    setPanelError('')
+    setIsOpeningPanel(true)
+
+    try {
+      const panelUrl = await fetchServerPanelUrl(server.uuid, token)
+      window.location.assign(panelUrl)
+    } catch (error) {
+      setPanelError(getErrorMessage(error, 'Unable to open the panel right now.'))
+    } finally {
+      setIsOpeningPanel(false)
+    }
+  }
 
   return (
     <div className="col-sm-4">
@@ -46,9 +72,15 @@ export default function ServerCard({ server }) {
             ) : (
               <>
                 <p>
-                  <a href="/panel" className="btn btn-green w-100 mb-10">
-                    <i className="fas fa-share text-white button"></i> Admin Panel
-                  </a>
+                  <button
+                    type="button"
+                    className="btn btn-green w-100 mb-10"
+                    onClick={handleOpenPanel}
+                    disabled={isOpeningPanel}
+                  >
+                    <i className="fas fa-share text-white button"></i>{' '}
+                    {isOpeningPanel ? 'Opening panel...' : 'Admin Panel'}
+                  </button>
                 </p>
                 <p>
                   <Link to="/dashboard/billing" className="btn btn-green btn-red w-100">
@@ -71,6 +103,8 @@ export default function ServerCard({ server }) {
               </p>
             </>
           )}
+
+          {panelError ? <p className="text-red">{panelError}</p> : null}
         </div>
       </div>
     </div>
