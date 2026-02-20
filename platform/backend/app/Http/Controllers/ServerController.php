@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers;
 
+use App\Services\PterodactylPanelLinkService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -41,6 +42,35 @@ class ServerController extends Controller
 
         return response()->json([
             'servers' => $items,
+        ]);
+    }
+
+    /**
+     * Resolve the panel URL for a server owned by the current user.
+     */
+    public function panelUrl(
+        Request $request,
+        string $uuid,
+        PterodactylPanelLinkService $panelLinkService
+    ): JsonResponse {
+        $user = $request->user();
+        $server = $user->servers()->where('uuid', $uuid)->firstOrFail();
+
+        if (! (bool) $server->stripe_tx_return || ! (bool) $server->initialised) {
+            return response()->json([
+                'message' => 'Server is still provisioning.',
+            ], 409);
+        }
+
+        $panelUrl = $panelLinkService->resolvePanelUrl($server);
+        if ($panelUrl === null) {
+            return response()->json([
+                'message' => 'Pterodactyl panel URL is not configured.',
+            ], 503);
+        }
+
+        return response()->json([
+            'panel_url' => $panelUrl,
         ]);
     }
 }

@@ -41,4 +41,10 @@ return [
         'webhook_secret' => env('STRIPE_WEBHOOK_SECRET'),
     ],
 
+    'pterodactyl' => [
+        'panel_url' => env('PTERO_PANEL'),
+        'api_url' => env('PTERO_API'),
+        'api_key' => env('PTERO_API_KEY'),
+    ],
+
 ];

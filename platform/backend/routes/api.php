@@ -17,6 +17,7 @@ Route::prefix('auth')->group(function (): void {
 
 Route::middleware('auth.jwt')->group(function (): void {
     Route::get('/servers', [ServerController::class, 'index']);
+    Route::get('/servers/{uuid}/panel-url', [ServerController::class, 'panelUrl']);
 });
 
 Route::get('/banner', [BannerController::class, 'index']);
