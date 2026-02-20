@@ -35,4 +35,11 @@ return [
         ],
     ],
 
+    'pterodactyl' => [
+        'base_url' => env('PTERODACTYL_BASE_URL'),
+        'application_api_key' => env('PTERODACTYL_APPLICATION_API_KEY'),
+        'client_api_key' => env('PTERODACTYL_CLIENT_API_KEY'),
+        'timeout' => (int) env('PTERODACTYL_TIMEOUT', 15),
+    ],
+
 ];
