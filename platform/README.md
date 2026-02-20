@@ -48,6 +48,7 @@ Routes exposed by the root Traefik router:
 - `http://store.localhost` -> React frontend dev server
 - `http://api.localhost` -> Laravel backend/API server
 - `http://orchestrator.localhost` -> Laravel orchestrator service
+- `http://panel.localhost` -> Pterodactyl Panel
 - `http://storybook.localhost` -> Component storybook (dev only)
 
 Stop the stack:
@@ -73,7 +74,7 @@ Optional reset flags:
 If your machine does not resolve `*.localhost` automatically, add this hosts entry:
 
 ```text
-127.0.0.1 store.localhost api.localhost orchestrator.localhost storybook.localhost
+127.0.0.1 store.localhost api.localhost orchestrator.localhost panel.localhost storybook.localhost
 ```
 
 ## Next steps

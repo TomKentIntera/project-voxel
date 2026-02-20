@@ -147,6 +147,58 @@ services:
     networks:
       - platform
 
+  pterodactyl-db:
+    image: mysql:8.0
+    environment:
+      MYSQL_ROOT_PASSWORD: secret
+      MYSQL_DATABASE: pterodactyl
+      MYSQL_USER: pterodactyl
+      MYSQL_PASSWORD: secret
+    volumes:
+      - pterodactyl_db_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-psecret"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    networks:
+      - platform
+
+  pterodactyl-panel:
+    image: ghcr.io/pterodactyl/panel:latest
+    environment:
+      APP_URL: http://panel.localhost
+      APP_TIMEZONE: UTC
+      APP_SERVICE_AUTHOR: noreply@localhost
+      TRUSTED_PROXIES: "*"
+      DB_CONNECTION: mysql
+      DB_HOST: pterodactyl-db
+      DB_PORT: 3306
+      DB_DATABASE: pterodactyl
+      DB_USERNAME: pterodactyl
+      DB_PASSWORD: secret
+      CACHE_DRIVER: file
+      SESSION_DRIVER: file
+      QUEUE_CONNECTION: database
+      MAIL_MAILER: log
+      MAIL_FROM_ADDRESS: noreply@localhost
+      MAIL_FROM_NAME: Pterodactyl Panel
+    volumes:
+      - pterodactyl_panel_var:/app/var
+      - pterodactyl_panel_logs:/app/storage/logs
+    expose:
+      - "80"
+    depends_on:
+      pterodactyl-db:
+        condition: service_healthy
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.panel.rule=Host(`panel.localhost`)
+      - traefik.http.routers.panel.entrypoints=web
+      - traefik.http.services.panel.loadbalancer.server.port=80
+    networks:
+      - platform
+
   phpmyadmin:
     image: phpmyadmin:latest
     environment:
@@ -178,6 +230,7 @@ services:
       - frontend
       - orchestrator-frontend
       - legacy
+      - pterodactyl-panel
     ports:
       - "80:80"
     volumes:
@@ -195,3 +248,6 @@ volumes:
   frontend_node_modules:
   orchestrator_frontend_node_modules:
   legacy_vendor:
+  pterodactyl_db_data:
+  pterodactyl_panel_var:
+  pterodactyl_panel_logs:
