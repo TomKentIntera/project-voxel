@@ -79,7 +79,7 @@
         <div class="text-center">
             <h4>You're ready to game!</h4>
             <p class="mb-20">Your payment has completed and your server has finished installing, all you need to do now is log into the panel and start your server.</p>
-            <p><a href="{{route('client.server.panel', ['serverUUID' => $serverData->uuid])}}" class="btn btn-green btn-large">Login to the control panel <i class="fas fa-lock-open text-white"></i></a></p>
+            <p><a href="{{url('panel')}}" class="btn btn-green btn-large">Login to the control panel <i class="fas fa-lock-open text-white"></i></a></p>
         </div>
     </div>
 
@@ -92,6 +92,7 @@ $(document).ready(function(){
 
     var serverID = "{{$serverData->uuid}}";
     var updateURL = "{{url('api/server/isInitialised/'.$serverData->uuid)}}";
+    var panelURL = "{{url('panel')}}";
     var isInitialised = false;
     var tempWait = 0;
 

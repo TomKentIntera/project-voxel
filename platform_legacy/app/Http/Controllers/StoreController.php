@@ -19,7 +19,6 @@ use Str;
 use Log;
 use Storage;
 use App\Libraries\Helpers\StripeHelper;
-use App\Libraries\Helpers\PterodactylHelper;
 use App\Models\Server;
 use App\Models\AvailabilityNotification;
 use App\Events\AvailabilityNotificationCreated;
@@ -81,21 +80,6 @@ class StoreController extends BaseController
         }
 
         return view('clientarea')->with('user', $user);
-    }
-
-    public function getServerPanel($serverUUID) {
-        $server = Server::where('uuid', $serverUUID)->where('user_id', Auth::id())->firstOrFail();
-
-        if($server->stripe_tx_return == false || $server->initialised == false) {
-            return redirect('/client')->with('error', 'Your server is still provisioning. Please try again shortly.');
-        }
-
-        $panelURL = PterodactylHelper::getPanelURLForServer($server);
-        if($panelURL == null) {
-            return redirect('/client')->with('error', 'The panel URL is not configured.');
-        }
-
-        return redirect()->away($panelURL);
     }
 
     public function getBillingArea() {

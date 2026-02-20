@@ -23,7 +23,6 @@ Route::middleware('auth')->group(function () {
 
     Route::get('/client/billing', 'App\Http\Controllers\StoreController@getBillingArea');
     Route::get('/client', 'App\Http\Controllers\StoreController@getClientArea')->name('home');
-    Route::get('/client/server/{serverUUID}/panel', 'App\Http\Controllers\StoreController@getServerPanel')->name('client.server.panel');
     
 
     Route::get('/plan/purchase/{planUUID}', 'App\Http\Controllers\StoreController@getPurchasePlan');

@@ -77,7 +77,7 @@
                                     <p><a href="#" class="btn btn-green btn-red btn-disabled w-100" disabled="disabled"><i class="fas fa-times text-white button"></i> Cancel Server</a></p>
                                     
                                     @else
-                                    <p><a href="{{route('client.server.panel', ['serverUUID' => $server->uuid])}}" class="btn btn-green w-100 mb-10"><i class="fas fa-share text-white button"></i> Admin Panel</a></p>
+                                    <p><a href="{{url('panel')}}" class="btn btn-green w-100 mb-10"><i class="fas fa-share text-white button"></i> Admin Panel</a></p>
                                     <p><a href="{{url('client/billing')}}" class="btn btn-green btn-red w-100"><i class="fas fa-times text-white button"></i> Cancel Server</a></p>
                                     @endif
                                 </div>
