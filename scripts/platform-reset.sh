@@ -49,6 +49,10 @@ else
   docker compose up -d
 fi
 
+if [ -x "$SCRIPT_DIR/event-bus-terraform.sh" ]; then
+  "$SCRIPT_DIR/event-bus-terraform.sh" local apply --auto-approve
+fi
+
 wait_for_service() {
   service="$1"
   port="$2"

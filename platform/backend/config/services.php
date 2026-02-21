@@ -47,4 +47,17 @@ return [
         'api_key' => env('PTERO_API_KEY'),
     ],
 
+    'event_bus' => [
+        'topics' => [
+            'server.ordered.v1' => env('EVENT_BUS_SERVER_ORDERS_TOPIC_ARN'),
+        ],
+        'server_orders_topic_arn' => env('EVENT_BUS_SERVER_ORDERS_TOPIC_ARN'),
+        'server_orders_queue_url' => env('EVENT_BUS_SERVER_ORDERS_QUEUE_URL'),
+        'region' => env('AWS_DEFAULT_REGION', 'us-east-1'),
+        'key' => env('AWS_ACCESS_KEY_ID'),
+        'secret' => env('AWS_SECRET_ACCESS_KEY'),
+        'session_token' => env('AWS_SESSION_TOKEN'),
+        'endpoint' => env('AWS_ENDPOINT'),
+    ],
+
 ];

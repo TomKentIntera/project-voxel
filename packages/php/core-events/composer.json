@@ -1,0 +1,25 @@
+{
+    "name": "interadigital/core-events",
+    "description": "Shared integration event contracts for Interadigital services.",
+    "license": "proprietary",
+    "type": "library",
+    "version": "1.0.0",
+    "require": {
+        "php": "^8.2",
+        "laravel/framework": "^12.0"
+    },
+    "autoload": {
+        "psr-4": {
+            "Interadigital\\CoreEvents\\": "src/"
+        }
+    },
+    "extra": {
+        "laravel": {
+            "providers": [
+                "Interadigital\\CoreEvents\\CoreEventsServiceProvider"
+            ]
+        }
+    },
+    "minimum-stability": "stable",
+    "prefer-stable": true
+}
