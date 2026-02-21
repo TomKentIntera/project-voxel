@@ -8,6 +8,10 @@ cd "$ROOT_DIR"
 
 docker compose up -d
 
+if [ -x "$SCRIPT_DIR/event-bus-terraform.sh" ]; then
+  "$SCRIPT_DIR/event-bus-terraform.sh" local apply --auto-approve
+fi
+
 echo "Platform stack started."
 echo "Frontend:  http://store.localhost"
 echo "API:       http://api.localhost"

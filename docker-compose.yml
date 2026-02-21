@@ -24,10 +24,6 @@ services:
     environment:
       SERVICES: sns,sqs
       AWS_DEFAULT_REGION: us-east-1
-      EVENT_BUS_SERVER_ORDERS_TOPIC_NAME: server-orders
-      EVENT_BUS_SERVER_ORDERS_QUEUE_NAME: server-orders-orchestrator
-    volumes:
-      - ./docker/localstack/init:/etc/localstack/init/ready.d
     ports:
       - "4566:4566"
     networks:

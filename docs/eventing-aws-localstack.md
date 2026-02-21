@@ -12,22 +12,40 @@ This project uses AWS-style eventing for cross-service communication:
 - SNS topic: `server-orders`
 - SQS queue: `server-orders-orchestrator`
 - Subscription: `server-orders` -> `server-orders-orchestrator`
+- SQS DLQ: `server-orders-orchestrator-dlq`
 
-For local development, Docker Compose starts LocalStack and auto-creates these resources.
+Resources are provisioned via Terraform from:
+
+- `infrastructure/terraform/event-bus`
 
 ## Local setup
 
-LocalStack is defined in `docker-compose.yml` and configured to load init scripts from:
+1. Start the stack (this runs Terraform for the event bus automatically):
 
-- `docker/localstack/init`
-- `orchestrator-worker` runs `php artisan events:consume-server-ordered`
+```bash
+scripts/platform-start.sh
+```
 
-The bootstrap script:
+2. Or run Terraform manually:
 
-- creates the SNS topic
-- creates the SQS queue
-- grants SNS permission to publish to that queue
-- subscribes the queue to the topic (raw message delivery)
+```bash
+scripts/event-bus-terraform.sh local apply --auto-approve
+```
+
+`orchestrator-worker` runs `php artisan events:consume-server-ordered`.
+
+## AWS setup
+
+```bash
+scripts/event-bus-terraform.sh aws plan
+scripts/event-bus-terraform.sh aws apply
+```
+
+You can print env exports from Terraform output:
+
+```bash
+scripts/event-bus-terraform.sh aws output-env
+```
 
 ## Environment variables
 
