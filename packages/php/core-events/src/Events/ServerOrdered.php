@@ -6,33 +6,48 @@ namespace Interadigital\CoreEvents\Events;
 
 use InvalidArgumentException;
 
-final class ServerOrdered
+final class ServerOrdered extends AbstractEvent
 {
     public const EVENT_TYPE = 'server.ordered.v1';
+    public const TOPIC_ARN_CONFIG_KEY = 'server_orders_topic_arn';
 
     /**
      * @param array<string, mixed> $config
      */
     public function __construct(
-        public readonly string $eventId,
-        public readonly string $occurredAt,
+        string $eventId,
+        string $occurredAt,
         public readonly int $serverId,
         public readonly string $serverUuid,
         public readonly int $userId,
         public readonly string $plan,
         public readonly array $config,
         public readonly ?string $stripeSubscriptionId = null,
-        public readonly ?string $correlationId = null,
+        ?string $correlationId = null,
     ) {
-        $this->assertNonEmpty($this->eventId, 'eventId');
-        $this->assertNonEmpty($this->occurredAt, 'occurredAt');
-        $this->assertNonEmpty($this->serverUuid, 'serverUuid');
-        $this->assertNonEmpty($this->plan, 'plan');
+        parent::__construct(
+            eventId: $eventId,
+            occurredAt: $occurredAt,
+            correlationId: $correlationId,
+        );
+
+        if (trim($this->serverUuid) === '') {
+            throw new InvalidArgumentException('Event field [serverUuid] cannot be empty.');
+        }
+
+        if (trim($this->plan) === '') {
+            throw new InvalidArgumentException('Event field [plan] cannot be empty.');
+        }
     }
 
     public static function eventType(): string
     {
         return self::EVENT_TYPE;
+    }
+
+    public static function topicArnConfigKey(): string
+    {
+        return self::TOPIC_ARN_CONFIG_KEY;
     }
 
     /**
@@ -83,87 +98,15 @@ final class ServerOrdered
     /**
      * @return array<string, mixed>
      */
-    public function toArray(): array
+    protected function payload(): array
     {
         return [
-            'event_id' => $this->eventId,
-            'event_type' => self::EVENT_TYPE,
-            'occurred_at' => $this->occurredAt,
             'server_id' => $this->serverId,
             'server_uuid' => $this->serverUuid,
             'user_id' => $this->userId,
             'plan' => $this->plan,
             'config' => $this->config,
             'stripe_subscription_id' => $this->stripeSubscriptionId,
-            'correlation_id' => $this->correlationId,
         ];
-    }
-
-    private function assertNonEmpty(string $value, string $field): void
-    {
-        if (trim($value) === '') {
-            throw new InvalidArgumentException(sprintf('Event field [%s] cannot be empty.', $field));
-        }
-    }
-
-    private static function nonEmptyString(mixed $value, string $field): string
-    {
-        if (! is_string($value) || trim($value) === '') {
-            throw new InvalidArgumentException(sprintf(
-                'Event field [%s] must be a non-empty string.',
-                $field,
-            ));
-        }
-
-        return trim($value);
-    }
-
-    private static function optionalNonEmptyString(mixed $value, string $field): ?string
-    {
-        if ($value === null) {
-            return null;
-        }
-
-        if (! is_string($value)) {
-            throw new InvalidArgumentException(sprintf(
-                'Event field [%s] must be a string when provided.',
-                $field,
-            ));
-        }
-
-        $trimmed = trim($value);
-
-        return $trimmed === '' ? null : $trimmed;
-    }
-
-    private static function integer(mixed $value, string $field): int
-    {
-        if (is_int($value)) {
-            return $value;
-        }
-
-        if (is_string($value) && preg_match('/^-?\d+$/', $value) === 1) {
-            return (int) $value;
-        }
-
-        throw new InvalidArgumentException(sprintf(
-            'Event field [%s] must be an integer.',
-            $field,
-        ));
-    }
-
-    /**
-     * @return array<string, mixed>
-     */
-    private static function arrayValue(mixed $value, string $field): array
-    {
-        if (! is_array($value)) {
-            throw new InvalidArgumentException(sprintf(
-                'Event field [%s] must be an array.',
-                $field,
-            ));
-        }
-
-        return $value;
     }
 }

@@ -5,6 +5,7 @@ This project uses AWS-style eventing for cross-service communication:
 - **Publisher**: store backend
 - **Subscriber**: orchestrator
 - **Transport**: SNS topic fanout to SQS queue
+- **Shared contracts/client**: `packages/php/core-events` (`AbstractEvent`, `ServerOrdered`, `EventBusClient`)
 
 ## Resource model
 
@@ -40,6 +41,8 @@ Both Laravel apps now support these variables:
 - `AWS_USE_PATH_STYLE_ENDPOINT`
 - `EVENT_BUS_SERVER_ORDERS_TOPIC_ARN`
 - `EVENT_BUS_SERVER_ORDERS_QUEUE_URL`
+
+And `services.event_bus.topics` maps event type -> topic ARN (for example `server.ordered.v1`).
 
 Queue config also supports the standard Laravel SQS variables:
 

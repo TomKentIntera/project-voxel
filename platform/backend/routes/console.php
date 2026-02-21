@@ -1,9 +1,9 @@
 <?php
 
-use App\Services\EventBus\ServerOrderedPublisher;
 use Illuminate\Foundation\Inspiring;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Str;
+use Interadigital\CoreEvents\EventBus\EventBusClient;
 use Interadigital\CoreEvents\Events\ServerOrdered;
 use Interadigital\CoreModels\Enums\ServerEventType;
 use Interadigital\CoreModels\Models\Server;
@@ -16,7 +16,7 @@ Artisan::command('inspire', function () {
 
 Artisan::command(
     'events:publish-server-ordered {serverUuid : Server UUID to publish}',
-    function (ServerOrderedPublisher $publisher, string $serverUuid): int {
+    function (EventBusClient $eventBusClient, string $serverUuid): int {
         $server = Server::query()->where('uuid', $serverUuid)->first();
 
         if ($server === null) {
@@ -38,7 +38,7 @@ Artisan::command(
             correlationId: is_string($server->stripe_tx_id) ? $server->stripe_tx_id : null,
         );
 
-        $publisher->publish($event);
+        $eventBusClient->publish($event);
 
         ServerEvent::query()->create([
             'server_id' => $server->id,

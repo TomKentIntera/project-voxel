@@ -2,23 +2,25 @@
 
 declare(strict_types=1);
 
-namespace App\Services\EventBus;
+namespace Interadigital\CoreEvents\EventBus;
 
 use Illuminate\Http\Client\Response;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use Interadigital\CoreEvents\Aws\SignatureV4;
-use Interadigital\CoreEvents\Events\ServerOrdered;
+use Interadigital\CoreEvents\Events\AbstractEvent;
 use RuntimeException;
 
-class ServerOrderedPublisher
+class EventBusClient
 {
-    public function publish(ServerOrdered $event): void
+    public function publish(AbstractEvent $event): void
     {
-        $topicArn = trim((string) config('services.event_bus.server_orders_topic_arn', ''));
+        $topicArn = $this->resolveTopicArn($event);
 
         if ($topicArn === '') {
-            Log::warning('Skipping server ordered publish because topic ARN is not configured.');
+            Log::warning('Skipping event publish because topic ARN is not configured.', [
+                'event_type' => $event::eventType(),
+            ]);
 
             return;
         }
@@ -61,10 +63,27 @@ class ServerOrderedPublisher
         }
 
         throw new RuntimeException(sprintf(
-            'Failed to publish server ordered event. HTTP %d: %s',
+            'Failed to publish event. HTTP %d: %s',
             $response->status(),
             trim($response->body()),
         ));
+    }
+
+    private function resolveTopicArn(AbstractEvent $event): string
+    {
+        $topics = config('services.event_bus.topics', []);
+
+        if (is_array($topics)) {
+            $topicArn = $topics[$event::eventType()] ?? null;
+
+            if (is_string($topicArn) && trim($topicArn) !== '') {
+                return trim($topicArn);
+            }
+        }
+
+        $legacyTopicArn = config('services.event_bus.'.$event::topicArnConfigKey(), '');
+
+        return is_string($legacyTopicArn) ? trim($legacyTopicArn) : '';
     }
 
     private function snsEndpoint(): string

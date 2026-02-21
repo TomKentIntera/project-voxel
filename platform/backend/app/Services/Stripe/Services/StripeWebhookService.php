@@ -4,10 +4,10 @@ declare(strict_types=1);
 
 namespace App\Services\Stripe\Services;
 
-use App\Services\EventBus\ServerOrderedPublisher;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
+use Interadigital\CoreEvents\EventBus\EventBusClient;
 use Interadigital\CoreEvents\Events\ServerOrdered;
 use Interadigital\CoreModels\Enums\ServerEventType;
 use Interadigital\CoreModels\Enums\ServerStatus;
@@ -17,7 +17,7 @@ use Interadigital\CoreModels\Models\ServerEvent;
 class StripeWebhookService
 {
     public function __construct(
-        private readonly ServerOrderedPublisher $serverOrderedPublisher
+        private readonly EventBusClient $eventBusClient
     ) {
     }
 
@@ -92,7 +92,7 @@ class StripeWebhookService
             correlationId: $subscriptionId,
         );
 
-        $this->serverOrderedPublisher->publish($event);
+        $this->eventBusClient->publish($event);
 
         ServerEvent::query()->create([
             'server_id' => $server->id,
