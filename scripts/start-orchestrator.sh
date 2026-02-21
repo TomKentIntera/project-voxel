@@ -34,5 +34,14 @@ if [ "$role" = "worker" ]; then
   exec php artisan queue:work --sleep=1 --tries=3 --timeout=90 --verbose
 fi
 
+if [ "$role" = "event-consumer" ]; then
+  # Wait for the migrations table to exist before starting event processing.
+  until php artisan migrate:status >/dev/null 2>&1; do
+    sleep 2
+  done
+
+  exec php artisan events:consume-server-ordered --max-messages=10 --wait=20 --sleep=1
+fi
+
 echo "Unknown orchestrator role: $role"
 exit 1

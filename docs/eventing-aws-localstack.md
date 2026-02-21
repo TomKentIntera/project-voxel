@@ -19,13 +19,14 @@ For local development, Docker Compose starts LocalStack and auto-creates these r
 LocalStack is defined in `docker-compose.yml` and configured to load init scripts from:
 
 - `docker/localstack/init`
+- `orchestrator-worker` runs `php artisan events:consume-server-ordered`
 
 The bootstrap script:
 
 - creates the SNS topic
 - creates the SQS queue
 - grants SNS permission to publish to that queue
-- subscribes the queue to the topic
+- subscribes the queue to the topic (raw message delivery)
 
 ## Environment variables
 
@@ -48,12 +49,18 @@ Queue config also supports the standard Laravel SQS variables:
 
 ## Local smoke test
 
-Publish an event:
+Publish an event through backend:
+
+```bash
+docker compose exec backend php artisan events:publish-server-ordered <server-uuid>
+```
+
+Publish directly to SNS:
 
 ```bash
 docker compose exec localstack awslocal sns publish \
   --topic-arn arn:aws:sns:us-east-1:000000000000:server-orders \
-  --message '{"event_type":"server.ordered.v1","server_uuid":"demo"}'
+  --message '{"event_id":"manual-demo","event_type":"server.ordered.v1","occurred_at":"2026-02-20T00:00:00Z","server_id":1,"server_uuid":"demo-uuid","user_id":1,"plan":"starter","config":{}}'
 ```
 
 Receive from queue:
@@ -62,5 +69,3 @@ Receive from queue:
 docker compose exec localstack awslocal sqs receive-message \
   --queue-url http://localhost:4566/000000000000/server-orders-orchestrator
 ```
-
-Note: when SNS fans out to SQS, the SQS body contains an SNS envelope and the original event is in `Message`.

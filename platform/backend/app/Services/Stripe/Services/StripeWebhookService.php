@@ -4,12 +4,23 @@ declare(strict_types=1);
 
 namespace App\Services\Stripe\Services;
 
+use App\Services\EventBus\ServerOrderedPublisher;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Str;
+use Interadigital\CoreEvents\Events\ServerOrdered;
+use Interadigital\CoreModels\Enums\ServerEventType;
 use Interadigital\CoreModels\Enums\ServerStatus;
 use Interadigital\CoreModels\Models\Server;
+use Interadigital\CoreModels\Models\ServerEvent;
 
 class StripeWebhookService
 {
+    public function __construct(
+        private readonly ServerOrderedPublisher $serverOrderedPublisher
+    ) {
+    }
+
     /**
      * @param  array<string, mixed>  $eventPayload
      */
@@ -53,12 +64,45 @@ class StripeWebhookService
             return;
         }
 
+        $shouldPublishOrder = ! (bool) $server->initialised
+            && ! $server->events()->where('type', ServerEventType::SERVER_ORDERED->value)->exists();
+
         $server->fill([
             'stripe_tx_return' => true,
             'suspended' => false,
-            'status' => ServerStatus::ACTIVE->value,
+            'status' => $shouldPublishOrder
+                ? ServerStatus::PROVISIONING->value
+                : ServerStatus::ACTIVE->value,
         ]);
         $server->save();
+
+        if (! $shouldPublishOrder) {
+            return;
+        }
+
+        $event = new ServerOrdered(
+            eventId: $this->eventId($eventPayload),
+            occurredAt: $this->occurredAt($eventPayload),
+            serverId: (int) $server->id,
+            serverUuid: (string) $server->uuid,
+            userId: (int) $server->user_id,
+            plan: (string) $server->plan,
+            config: $this->decodeServerConfig($server),
+            stripeSubscriptionId: $subscriptionId,
+            correlationId: $subscriptionId,
+        );
+
+        $this->serverOrderedPublisher->publish($event);
+
+        ServerEvent::query()->create([
+            'server_id' => $server->id,
+            'actor_id' => null,
+            'type' => ServerEventType::SERVER_ORDERED->value,
+            'meta' => [
+                'event_id' => $event->eventId,
+                'stripe_subscription_id' => $subscriptionId,
+            ],
+        ]);
     }
 
     /**
@@ -83,5 +127,53 @@ class StripeWebhookService
             'status' => ServerStatus::SUSPENDED->value,
         ]);
         $server->save();
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function decodeServerConfig(Server $server): array
+    {
+        $rawConfig = $server->config;
+
+        if (! is_string($rawConfig) || trim($rawConfig) === '') {
+            return [];
+        }
+
+        $decoded = json_decode($rawConfig, true);
+
+        return is_array($decoded) ? $decoded : [];
+    }
+
+    /**
+     * @param array<string, mixed> $eventPayload
+     */
+    private function eventId(array $eventPayload): string
+    {
+        $id = $eventPayload['id'] ?? null;
+
+        if (is_string($id) && trim($id) !== '') {
+            return trim($id);
+        }
+
+        return (string) Str::uuid();
+    }
+
+    /**
+     * @param array<string, mixed> $eventPayload
+     */
+    private function occurredAt(array $eventPayload): string
+    {
+        $created = $eventPayload['created'] ?? null;
+
+        if (is_int($created)) {
+            return Carbon::createFromTimestampUTC($created)->toIso8601String();
+        }
+
+        if (is_string($created) && ctype_digit($created)) {
+            return Carbon::createFromTimestampUTC((int) $created)->toIso8601String();
+        }
+
+        return now()->toIso8601String();
     }
 }

@@ -121,6 +121,30 @@ services:
     networks:
       - platform
 
+  orchestrator-worker:
+    build:
+      context: .
+      dockerfile: platform/orchestrator/docker/Dockerfile
+    working_dir: /var/www/html
+    environment:
+      AWS_ACCESS_KEY_ID: test
+      AWS_SECRET_ACCESS_KEY: test
+      AWS_DEFAULT_REGION: us-east-1
+      AWS_ENDPOINT: http://localstack:4566
+      AWS_USE_PATH_STYLE_ENDPOINT: "true"
+      EVENT_BUS_SERVER_ORDERS_TOPIC_ARN: arn:aws:sns:us-east-1:000000000000:server-orders
+      EVENT_BUS_SERVER_ORDERS_QUEUE_URL: http://localstack:4566/000000000000/server-orders-orchestrator
+    volumes:
+      - ./platform/orchestrator:/var/www/html
+      - ./packages:/var/packages:ro
+      - orchestrator_vendor:/var/www/html/vendor
+    command: ["event-consumer"]
+    depends_on:
+      - orchestrator
+      - localstack
+    networks:
+      - platform
+
   frontend:
     image: node:22-alpine
     working_dir: /app

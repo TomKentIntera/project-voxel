@@ -8,6 +8,7 @@
     "require": {
         "php": "^8.2",
         "interadigital/core-auth": "^1.0",
+        "interadigital/core-events": "^1.0",
         "interadigital/core-models": "^1.0",
         "laravel/framework": "^12.0",
         "laravel/tinker": "^2.10.1"
@@ -32,6 +33,13 @@
         {
             "type": "path",
             "url": "../../packages/php/core-models",
+            "options": {
+                "symlink": true
+            }
+        },
+        {
+            "type": "path",
+            "url": "../../packages/php/core-events",
             "options": {
                 "symlink": true
             }

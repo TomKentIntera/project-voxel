@@ -165,6 +165,8 @@ class ServerController extends Controller
     private function labelEventType(string $type): string
     {
         return match ($type) {
+            'server.ordered.v1' => 'Server ordered',
+            'server.provisioning.started' => 'Provisioning started',
             'server.provisioned' => 'Server provisioned',
             'server.cancelled' => 'Server cancelled',
             'server.suspended' => 'Server suspended',

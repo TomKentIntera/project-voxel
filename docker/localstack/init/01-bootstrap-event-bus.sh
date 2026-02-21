@@ -33,6 +33,7 @@ awslocal sqs set-queue-attributes \
 awslocal sns subscribe \
     --topic-arn "${TOPIC_ARN}" \
     --protocol sqs \
-    --notification-endpoint "${QUEUE_ARN}" >/dev/null
+    --notification-endpoint "${QUEUE_ARN}" \
+    --attributes RawMessageDelivery=true >/dev/null
 
 echo "LocalStack event bus ready."
