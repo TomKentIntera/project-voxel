@@ -1,0 +1,66 @@
+# Event handling: AWS in production, LocalStack locally
+
+This project uses AWS-style eventing for cross-service communication:
+
+- **Publisher**: store backend
+- **Subscriber**: orchestrator
+- **Transport**: SNS topic fanout to SQS queue
+
+## Resource model
+
+- SNS topic: `server-orders`
+- SQS queue: `server-orders-orchestrator`
+- Subscription: `server-orders` -> `server-orders-orchestrator`
+
+For local development, Docker Compose starts LocalStack and auto-creates these resources.
+
+## Local setup
+
+LocalStack is defined in `docker-compose.yml` and configured to load init scripts from:
+
+- `docker/localstack/init`
+
+The bootstrap script:
+
+- creates the SNS topic
+- creates the SQS queue
+- grants SNS permission to publish to that queue
+- subscribes the queue to the topic
+
+## Environment variables
+
+Both Laravel apps now support these variables:
+
+- `AWS_ACCESS_KEY_ID`
+- `AWS_SECRET_ACCESS_KEY`
+- `AWS_SESSION_TOKEN`
+- `AWS_DEFAULT_REGION`
+- `AWS_ENDPOINT` (set to `http://localstack:4566` in Docker for local)
+- `AWS_USE_PATH_STYLE_ENDPOINT`
+- `EVENT_BUS_SERVER_ORDERS_TOPIC_ARN`
+- `EVENT_BUS_SERVER_ORDERS_QUEUE_URL`
+
+Queue config also supports the standard Laravel SQS variables:
+
+- `SQS_PREFIX`
+- `SQS_QUEUE`
+- `SQS_SUFFIX`
+
+## Local smoke test
+
+Publish an event:
+
+```bash
+docker compose exec localstack awslocal sns publish \
+  --topic-arn arn:aws:sns:us-east-1:000000000000:server-orders \
+  --message '{"event_type":"server.ordered.v1","server_uuid":"demo"}'
+```
+
+Receive from queue:
+
+```bash
+docker compose exec localstack awslocal sqs receive-message \
+  --queue-url http://localhost:4566/000000000000/server-orders-orchestrator
+```
+
+Note: when SNS fans out to SQS, the SQS body contains an SNS envelope and the original event is in `Message`.

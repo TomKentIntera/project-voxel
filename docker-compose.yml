@@ -19,11 +19,32 @@ services:
     networks:
       - platform
 
+  localstack:
+    image: localstack/localstack:4.4.0
+    environment:
+      SERVICES: sns,sqs
+      AWS_DEFAULT_REGION: us-east-1
+      EVENT_BUS_SERVER_ORDERS_TOPIC_NAME: server-orders
+      EVENT_BUS_SERVER_ORDERS_QUEUE_NAME: server-orders-orchestrator
+    volumes:
+      - ./docker/localstack/init:/etc/localstack/init/ready.d
+    ports:
+      - "4566:4566"
+    networks:
+      - platform
+
   backend:
     build:
       context: .
       dockerfile: platform/backend/docker/Dockerfile
     working_dir: /var/www/html
+    environment:
+      AWS_ACCESS_KEY_ID: test
+      AWS_SECRET_ACCESS_KEY: test
+      AWS_DEFAULT_REGION: us-east-1
+      AWS_ENDPOINT: http://localstack:4566
+      AWS_USE_PATH_STYLE_ENDPOINT: "true"
+      EVENT_BUS_SERVER_ORDERS_TOPIC_ARN: arn:aws:sns:us-east-1:000000000000:server-orders
     volumes:
       - ./platform/backend:/var/www/html
       - ./packages:/var/packages:ro
@@ -34,6 +55,8 @@ services:
     depends_on:
       mysql:
         condition: service_healthy
+      localstack:
+        condition: service_started
     labels:
       - traefik.enable=true
       - traefik.http.routers.api.rule=Host(`api.localhost`)
@@ -47,6 +70,13 @@ services:
       context: .
       dockerfile: platform/backend/docker/Dockerfile
     working_dir: /var/www/html
+    environment:
+      AWS_ACCESS_KEY_ID: test
+      AWS_SECRET_ACCESS_KEY: test
+      AWS_DEFAULT_REGION: us-east-1
+      AWS_ENDPOINT: http://localstack:4566
+      AWS_USE_PATH_STYLE_ENDPOINT: "true"
+      EVENT_BUS_SERVER_ORDERS_TOPIC_ARN: arn:aws:sns:us-east-1:000000000000:server-orders
     volumes:
       - ./platform/backend:/var/www/html
       - ./packages:/var/packages:ro
@@ -54,6 +84,7 @@ services:
     command: ["worker"]
     depends_on:
       - backend
+      - localstack
     networks:
       - platform
 
@@ -62,6 +93,14 @@ services:
       context: .
       dockerfile: platform/orchestrator/docker/Dockerfile
     working_dir: /var/www/html
+    environment:
+      AWS_ACCESS_KEY_ID: test
+      AWS_SECRET_ACCESS_KEY: test
+      AWS_DEFAULT_REGION: us-east-1
+      AWS_ENDPOINT: http://localstack:4566
+      AWS_USE_PATH_STYLE_ENDPOINT: "true"
+      EVENT_BUS_SERVER_ORDERS_TOPIC_ARN: arn:aws:sns:us-east-1:000000000000:server-orders
+      EVENT_BUS_SERVER_ORDERS_QUEUE_URL: http://localstack:4566/000000000000/server-orders-orchestrator
     volumes:
       - ./platform/orchestrator:/var/www/html
       - ./packages:/var/packages:ro
@@ -72,6 +111,8 @@ services:
     depends_on:
       mysql:
         condition: service_healthy
+      localstack:
+        condition: service_started
     labels:
       - traefik.enable=true
       - traefik.http.routers.orchestrator.rule=Host(`orchestrator.localhost`)
