@@ -9,6 +9,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Interadigital\CoreModels\Models\Node;
 use Interadigital\CoreModels\Models\TelemetryNode;
+use Interadigital\CoreModels\Models\TelemetryNodeSample;
 use Interadigital\CoreModels\Models\TelemetryServer;
 use Symfony\Component\HttpFoundation\Response;
 
@@ -48,6 +49,13 @@ class NodeTelemetryController extends Controller
                 'updated_at' => $telemetryTimestamp,
             ],
         ], ['node_id'], ['cpu_pct', 'iowait_pct', 'updated_at']);
+
+        TelemetryNodeSample::query()->create([
+            'node_id' => $node_id,
+            'cpu_pct' => (float) $validated['node']['cpu_pct'],
+            'iowait_pct' => (float) $validated['node']['iowait_pct'],
+            'recorded_at' => $telemetryTimestamp,
+        ]);
 
         $serversById = [];
 

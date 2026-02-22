@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Interadigital\CoreModels\Models\Node;
 use Interadigital\CoreModels\Models\TelemetryNode;
+use Interadigital\CoreModels\Models\TelemetryNodeSample;
 use Interadigital\CoreModels\Models\TelemetryServer;
 use Tests\TestCase;
 
@@ -58,6 +59,7 @@ class NodeTelemetryApiTest extends TestCase
 
         $this->assertDatabaseCount('telemetry_node', 1);
         $this->assertDatabaseCount('telemetry_server', 2);
+        $this->assertDatabaseCount('telemetry_node_sample', 1);
 
         $secondPayload = $this->basePayload('node-a');
         $secondPayload['node']['cpu_pct'] = 88.75;
@@ -75,6 +77,7 @@ class NodeTelemetryApiTest extends TestCase
 
         $this->assertDatabaseCount('telemetry_node', 1);
         $this->assertDatabaseCount('telemetry_server', 2);
+        $this->assertDatabaseCount('telemetry_node_sample', 2);
 
         $node = TelemetryNode::find('node-a');
         $this->assertNotNull($node);
@@ -92,6 +95,14 @@ class NodeTelemetryApiTest extends TestCase
         $this->assertNotNull($nodeIdentity);
         $this->assertNotNull($nodeIdentity->last_active_at);
         $this->assertNotNull($nodeIdentity->last_used_at);
+
+        $latestSample = TelemetryNodeSample::query()
+            ->where('node_id', 'node-a')
+            ->orderByDesc('recorded_at')
+            ->first();
+        $this->assertNotNull($latestSample);
+        $this->assertEqualsWithDelta(88.75, (float) $latestSample->cpu_pct, 0.001);
+        $this->assertEqualsWithDelta(4.25, (float) $latestSample->iowait_pct, 0.001);
     }
 
     public function test_payload_node_id_must_match_route_node_id(): void
@@ -109,6 +120,7 @@ class NodeTelemetryApiTest extends TestCase
 
         $this->assertDatabaseCount('telemetry_node', 0);
         $this->assertDatabaseCount('telemetry_server', 0);
+        $this->assertDatabaseCount('telemetry_node_sample', 0);
     }
 
     /**
