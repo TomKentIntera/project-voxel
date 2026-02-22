@@ -1,0 +1,34 @@
+# Testing-only Wings configuration for the local Docker stack.
+# Replace uuid/token_id/token with values copied from the Panel node config before real node tests.
+debug: false
+uuid: "00000000-0000-4000-8000-000000000001"
+token_id: "replace-me"
+token: "replace-me"
+
+api:
+  host: "0.0.0.0"
+  port: 8080
+  ssl:
+    enabled: false
+
+system:
+  root_directory: "/tmp/pterodactyl"
+  log_directory: "/tmp/pterodactyl-logs"
+  data: "/tmp/pterodactyl/volumes"
+  archive_directory: "/tmp/pterodactyl/archives"
+  backup_directory: "/tmp/pterodactyl/backups"
+  tmp_directory: "/tmp/pterodactyl-tmp"
+  timezone: "UTC"
+  passwd:
+    enabled: false
+  machine_id:
+    enabled: false
+
+remote: "http://pterodactyl-panel"
+remote_query:
+  timeout: 30
+  boot_servers_per_page: 50
+
+allowed_mounts: []
+allowed_origins: []
+ignore_panel_config_updates: true

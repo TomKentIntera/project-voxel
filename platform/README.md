@@ -43,6 +43,12 @@ npm run dev
 ./scripts/platform-start.sh
 ```
 
+Start with the testing-only Wings container enabled:
+
+```bash
+./scripts/platform-start.sh --with-wings
+```
+
 Routes exposed by the root Traefik router:
 
 - `http://store.localhost` -> React frontend dev server
@@ -50,6 +56,14 @@ Routes exposed by the root Traefik router:
 - `http://orchestrator.localhost` -> Laravel orchestrator service
 - `http://panel.localhost` -> Pterodactyl Panel
 - `http://storybook.localhost` -> Component storybook (dev only)
+
+Additional testing-only service (not started unless `--with-wings` is passed):
+
+- `http://127.0.0.1:8080` -> Pterodactyl Wings API
+- `sftp://127.0.0.1:2022` -> Wings SFTP endpoint
+
+Wings config lives at `docker/wings/config.yml`. Replace `uuid`, `token_id`, and `token`
+with values from your Panel node configuration before running node lifecycle tests.
 
 Stop the stack:
 
