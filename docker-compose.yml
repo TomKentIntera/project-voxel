@@ -260,6 +260,31 @@ services:
     networks:
       - platform
 
+  pterodactyl-wings:
+    image: ghcr.io/pterodactyl/wings:latest
+    profiles:
+      - testing
+    restart: unless-stopped
+    tty: true
+    environment:
+      TZ: UTC
+      WINGS_UID: 988
+      WINGS_GID: 988
+      WINGS_USERNAME: pterodactyl
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ./docker/wings/config.yml:/etc/pterodactyl/config.yml:ro
+      - /tmp/pterodactyl:/tmp/pterodactyl
+      - /tmp/pterodactyl-logs:/tmp/pterodactyl-logs
+      - /tmp/pterodactyl-tmp:/tmp/pterodactyl-tmp
+    ports:
+      - "8080:8080"
+      - "2022:2022"
+    depends_on:
+      - pterodactyl-panel
+    networks:
+      - platform
+
   phpmyadmin:
     image: phpmyadmin:latest
     environment:
