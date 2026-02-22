@@ -8,15 +8,17 @@ cd "$ROOT_DIR"
 
 rebuild=false
 seed=false
+with_wings=false
 
 usage() {
   cat <<'EOF'
-Usage: scripts/platform-reset.sh [--rebuild] [--seed]
+Usage: scripts/platform-reset.sh [--rebuild] [--seed] [--with-wings]
 
 Options:
-  --rebuild   Recreate containers and rebuild images before starting.
-  --seed      Run database seeders after migrate:fresh.
-  --help      Show this help output.
+  --rebuild     Recreate containers and rebuild images before starting.
+  --seed        Run database seeders after migrate:fresh.
+  --with-wings  Start testing-only Wings profile.
+  --help        Show this help output.
 EOF
 }
 
@@ -27,6 +29,9 @@ while [ "$#" -gt 0 ]; do
       ;;
     --seed)
       seed=true
+      ;;
+    --with-wings)
+      with_wings=true
       ;;
     --help|-h)
       usage
@@ -41,12 +46,17 @@ while [ "$#" -gt 0 ]; do
   shift
 done
 
+compose_cmd="docker compose"
+if [ "$with_wings" = "true" ]; then
+  compose_cmd="docker compose --profile testing"
+fi
+
 if [ "$rebuild" = "true" ]; then
-  docker compose down --remove-orphans
-  docker compose up -d --build --force-recreate
+  $compose_cmd down --remove-orphans
+  $compose_cmd up -d --build --force-recreate
 else
-  docker compose stop
-  docker compose up -d
+  $compose_cmd stop
+  $compose_cmd up -d
 fi
 
 if [ -x "$SCRIPT_DIR/event-bus-terraform.sh" ]; then

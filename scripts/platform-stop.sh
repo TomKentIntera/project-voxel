@@ -6,6 +6,6 @@ ROOT_DIR="$(CDPATH= cd -- "$SCRIPT_DIR/.." && pwd)"
 
 cd "$ROOT_DIR"
 
-docker compose down --remove-orphans
+docker compose stop
 
 echo "Platform stack stopped."
