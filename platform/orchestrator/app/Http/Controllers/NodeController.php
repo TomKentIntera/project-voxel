@@ -14,6 +14,7 @@ use Interadigital\CoreModels\Models\Server;
 use Interadigital\CoreModels\Models\TelemetryNode;
 use Interadigital\CoreModels\Models\TelemetryNodeSample;
 use Interadigital\CoreModels\Models\TelemetryServer;
+use Interadigital\CoreModels\Models\TelemetryServerSample;
 use Interadigital\CoreModels\Models\User;
 use Symfony\Component\HttpFoundation\Response;
 
@@ -112,6 +113,7 @@ class NodeController extends Controller
 
         DB::transaction(function () use ($id, $node): void {
             TelemetryNodeSample::query()->where('node_id', $id)->delete();
+            TelemetryServerSample::query()->where('node_id', $id)->delete();
             TelemetryServer::query()->where('node_id', $id)->delete();
             TelemetryNode::query()->where('node_id', $id)->delete();
             $node->delete();

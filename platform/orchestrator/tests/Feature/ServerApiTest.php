@@ -6,6 +6,8 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Interadigital\CoreAuth\Services\JwtService;
 use Interadigital\CoreModels\Models\Server;
 use Interadigital\CoreModels\Models\ServerEvent;
+use Interadigital\CoreModels\Models\TelemetryServer;
+use Interadigital\CoreModels\Models\TelemetryServerSample;
 use Interadigital\CoreModels\Models\User;
 use Tests\TestCase;
 
@@ -139,6 +141,40 @@ class ServerApiTest extends TestCase
             'created_at' => now()->subHour(),
         ]);
 
+        TelemetryServer::factory()->create([
+            'server_id' => $server->uuid,
+            'node_id' => 'node-eu-1',
+            'players_online' => 15,
+            'cpu_pct' => 47.25,
+            'io_write_bytes_per_s' => 1500.0,
+            'updated_at' => now()->subMinutes(2),
+        ]);
+
+        TelemetryServerSample::query()->create([
+            'server_id' => $server->uuid,
+            'node_id' => 'node-eu-1',
+            'players_online' => 13,
+            'cpu_pct' => 41.1,
+            'io_write_bytes_per_s' => 1200.0,
+            'recorded_at' => now()->subHours(4),
+        ]);
+        TelemetryServerSample::query()->create([
+            'server_id' => $server->uuid,
+            'node_id' => 'node-eu-1',
+            'players_online' => 17,
+            'cpu_pct' => 53.4,
+            'io_write_bytes_per_s' => 1800.0,
+            'recorded_at' => now()->subMinutes(45),
+        ]);
+        TelemetryServerSample::query()->create([
+            'server_id' => $server->uuid,
+            'node_id' => 'node-eu-1',
+            'players_online' => 3,
+            'cpu_pct' => 8.8,
+            'io_write_bytes_per_s' => 250.0,
+            'recorded_at' => now()->subHours(30),
+        ]);
+
         $response = $this->withHeader('Authorization', 'Bearer '.$token)
             ->getJson('/api/servers/'.$server->id);
 
@@ -152,7 +188,15 @@ class ServerApiTest extends TestCase
             ->assertJsonPath('data.events.0.label', 'Server suspended')
             ->assertJsonPath('data.events.0.actor', null)
             ->assertJsonPath('data.events.1.id', $olderEvent->id)
-            ->assertJsonPath('data.events.1.actor.id', $actor->id);
+            ->assertJsonPath('data.events.1.actor.id', $actor->id)
+            ->assertJsonPath('data.performance_last_24h.latest.players_online', 15)
+            ->assertJsonPath('data.performance_last_24h.latest.cpu_pct', 47.25)
+            ->assertJsonPath('data.performance_last_24h.latest.io_write_bytes_per_s', 1500)
+            ->assertJsonPath('data.performance_last_24h.latest.node_id', 'node-eu-1');
+
+        /** @var list<array<string, mixed>> $samples */
+        $samples = $response->json('data.performance_last_24h.samples');
+        $this->assertCount(2, $samples);
     }
 
     public function test_show_returns_not_found_for_missing_server(): void

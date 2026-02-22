@@ -11,6 +11,7 @@ use Interadigital\CoreModels\Models\Node;
 use Interadigital\CoreModels\Models\TelemetryNode;
 use Interadigital\CoreModels\Models\TelemetryNodeSample;
 use Interadigital\CoreModels\Models\TelemetryServer;
+use Interadigital\CoreModels\Models\TelemetryServerSample;
 use Symfony\Component\HttpFoundation\Response;
 
 class NodeTelemetryController extends Controller
@@ -58,16 +59,31 @@ class NodeTelemetryController extends Controller
         ]);
 
         $serversById = [];
+        $serverSamples = [];
 
         foreach ($validated['servers'] as $serverTelemetry) {
             $serverId = (string) $serverTelemetry['server_id'];
+            $playersOnline = $serverTelemetry['players_online'] ?? null;
+            $cpuPct = (float) $serverTelemetry['cpu_pct'];
+            $ioWriteBytesPerSecond = (float) $serverTelemetry['io_write_bytes_per_s'];
 
             $serversById[$serverId] = [
                 'server_id' => $serverId,
                 'node_id' => $node_id,
-                'players_online' => $serverTelemetry['players_online'] ?? null,
-                'cpu_pct' => (float) $serverTelemetry['cpu_pct'],
-                'io_write_bytes_per_s' => (float) $serverTelemetry['io_write_bytes_per_s'],
+                'players_online' => $playersOnline,
+                'cpu_pct' => $cpuPct,
+                'io_write_bytes_per_s' => $ioWriteBytesPerSecond,
+                'created_at' => $telemetryTimestamp,
+                'updated_at' => $telemetryTimestamp,
+            ];
+
+            $serverSamples[] = [
+                'server_id' => $serverId,
+                'node_id' => $node_id,
+                'players_online' => $playersOnline,
+                'cpu_pct' => $cpuPct,
+                'io_write_bytes_per_s' => $ioWriteBytesPerSecond,
+                'recorded_at' => $telemetryTimestamp,
                 'created_at' => $telemetryTimestamp,
                 'updated_at' => $telemetryTimestamp,
             ];
@@ -79,6 +95,10 @@ class NodeTelemetryController extends Controller
                 ['server_id'],
                 ['node_id', 'players_online', 'cpu_pct', 'io_write_bytes_per_s', 'updated_at']
             );
+        }
+
+        if ($serverSamples !== []) {
+            TelemetryServerSample::query()->insert($serverSamples);
         }
 
         $this->touchNodeActivity($request, $telemetryTimestamp);

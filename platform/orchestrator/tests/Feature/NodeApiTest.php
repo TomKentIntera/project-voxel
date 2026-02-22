@@ -8,6 +8,7 @@ use Interadigital\CoreModels\Models\Server;
 use Interadigital\CoreModels\Models\TelemetryNode;
 use Interadigital\CoreModels\Models\TelemetryNodeSample;
 use Interadigital\CoreModels\Models\TelemetryServer;
+use Interadigital\CoreModels\Models\TelemetryServerSample;
 use Interadigital\CoreModels\Models\User;
 use Tests\TestCase;
 
@@ -207,6 +208,15 @@ class NodeApiTest extends TestCase
             'node_id' => $node->id,
         ]);
 
+        TelemetryServerSample::query()->create([
+            'server_id' => 'delete-me-server',
+            'node_id' => $node->id,
+            'players_online' => 3,
+            'cpu_pct' => 20.5,
+            'io_write_bytes_per_s' => 1550.0,
+            'recorded_at' => now()->subMinutes(5),
+        ]);
+
         $this->withHeader('Authorization', 'Bearer '.$token)
             ->deleteJson('/api/nodes/'.$node->id)
             ->assertOk()
@@ -218,6 +228,7 @@ class NodeApiTest extends TestCase
         $this->assertDatabaseMissing('telemetry_node', ['node_id' => $node->id]);
         $this->assertDatabaseMissing('telemetry_node_sample', ['node_id' => $node->id]);
         $this->assertDatabaseMissing('telemetry_server', ['node_id' => $node->id]);
+        $this->assertDatabaseMissing('telemetry_server_sample', ['node_id' => $node->id]);
     }
 
     private function authenticateAdmin(): string
