@@ -55,9 +55,4 @@ return [
         'endpoint' => env('AWS_ENDPOINT'),
     ],
 
-    'node_telemetry' => [
-        'token' => env('NODE_TOKEN'),
-        'tokens' => json_decode((string) env('NODE_TOKENS_JSON', '{}'), true),
-    ],
-
 ];

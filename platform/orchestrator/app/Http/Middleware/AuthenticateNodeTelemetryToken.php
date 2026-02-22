@@ -6,6 +6,7 @@ namespace App\Http\Middleware;
 
 use Closure;
 use Illuminate\Http\Request;
+use Interadigital\CoreModels\Models\Node;
 use Symfony\Component\HttpFoundation\Response;
 
 class AuthenticateNodeTelemetryToken
@@ -16,11 +17,19 @@ class AuthenticateNodeTelemetryToken
     public function handle(Request $request, Closure $next): Response
     {
         $providedToken = $this->resolveTokenFromRequest($request);
-        $expectedToken = $this->resolveExpectedTokenForNode((string) $request->route('node_id', ''));
+        $nodeId = trim((string) $request->route('node_id', ''));
 
-        if ($providedToken === null || $expectedToken === null || ! hash_equals($expectedToken, $providedToken)) {
+        if ($providedToken === null || $nodeId === '') {
             return $this->unauthenticatedResponse();
         }
+
+        $node = Node::find($nodeId);
+
+        if (! ($node instanceof Node) || ! $node->matchesToken($providedToken)) {
+            return $this->unauthenticatedResponse();
+        }
+
+        $request->attributes->set('node', $node);
 
         return $next($request);
     }
@@ -36,23 +45,6 @@ class AuthenticateNodeTelemetryToken
         $headerToken = trim((string) $request->header('X-Node-Token', ''));
 
         return $headerToken !== '' ? $headerToken : null;
-    }
-
-    private function resolveExpectedTokenForNode(string $nodeId): ?string
-    {
-        $tokenMap = config('services.node_telemetry.tokens', []);
-
-        if (is_array($tokenMap) && $nodeId !== '' && array_key_exists($nodeId, $tokenMap)) {
-            $nodeToken = trim((string) $tokenMap[$nodeId]);
-
-            if ($nodeToken !== '') {
-                return $nodeToken;
-            }
-        }
-
-        $fallbackToken = trim((string) config('services.node_telemetry.token', ''));
-
-        return $fallbackToken !== '' ? $fallbackToken : null;
     }
 
     private function unauthenticatedResponse(): Response

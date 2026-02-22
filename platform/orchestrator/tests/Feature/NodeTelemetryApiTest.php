@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Interadigital\CoreModels\Models\Node;
 use Interadigital\CoreModels\Models\TelemetryNode;
 use Interadigital\CoreModels\Models\TelemetryServer;
 use Tests\TestCase;
@@ -13,9 +14,9 @@ class NodeTelemetryApiTest extends TestCase
 
     public function test_telemetry_endpoint_requires_valid_node_token(): void
     {
-        $this->configureNodeTelemetryAuth([
-            'node-a' => 'node-a-token',
-        ], null);
+        ['rawToken' => $rawToken] = $this->createNodeWithRawToken([
+            'id' => 'node-a',
+        ]);
 
         $payload = $this->basePayload('node-a');
 
@@ -31,17 +32,24 @@ class NodeTelemetryApiTest extends TestCase
             ->assertJson([
                 'message' => 'Unauthenticated.',
             ]);
+
+        $this->withHeader('Authorization', 'Bearer '.$rawToken)
+            ->postJson('/api/internal/nodes/unknown-node/telemetry', $this->basePayload('unknown-node'))
+            ->assertUnauthorized()
+            ->assertJson([
+                'message' => 'Unauthenticated.',
+            ]);
     }
 
     public function test_telemetry_endpoint_upserts_rows_by_primary_key(): void
     {
-        $this->configureNodeTelemetryAuth([
-            'node-a' => 'node-a-token',
-        ], null);
+        ['rawToken' => $rawToken] = $this->createNodeWithRawToken([
+            'id' => 'node-a',
+        ]);
 
         $firstPayload = $this->basePayload('node-a');
 
-        $this->withHeader('Authorization', 'Bearer node-a-token')
+        $this->withHeader('Authorization', 'Bearer '.$rawToken)
             ->postJson('/api/internal/nodes/node-a/telemetry', $firstPayload)
             ->assertAccepted()
             ->assertJson([
@@ -61,7 +69,7 @@ class NodeTelemetryApiTest extends TestCase
         $secondPayload['servers'][1]['cpu_pct'] = 13.25;
         $secondPayload['servers'][1]['io_write_bytes_per_s'] = 1234.5;
 
-        $this->withHeader('Authorization', 'Bearer node-a-token')
+        $this->withHeader('Authorization', 'Bearer '.$rawToken)
             ->postJson('/api/internal/nodes/node-a/telemetry', $secondPayload)
             ->assertAccepted();
 
@@ -79,13 +87,20 @@ class NodeTelemetryApiTest extends TestCase
         $this->assertSame(42, $firstServer->players_online);
         $this->assertEqualsWithDelta(91.5, (float) $firstServer->cpu_pct, 0.001);
         $this->assertEqualsWithDelta(22222.0, (float) $firstServer->io_write_bytes_per_s, 0.001);
+
+        $nodeIdentity = Node::find('node-a');
+        $this->assertNotNull($nodeIdentity);
+        $this->assertNotNull($nodeIdentity->last_active_at);
+        $this->assertNotNull($nodeIdentity->last_used_at);
     }
 
     public function test_payload_node_id_must_match_route_node_id(): void
     {
-        $this->configureNodeTelemetryAuth([], 'shared-node-token');
+        ['rawToken' => $rawToken] = $this->createNodeWithRawToken([
+            'id' => 'node-a',
+        ]);
 
-        $this->withHeader('Authorization', 'Bearer shared-node-token')
+        $this->withHeader('Authorization', 'Bearer '.$rawToken)
             ->postJson('/api/internal/nodes/node-a/telemetry', $this->basePayload('node-b'))
             ->assertUnprocessable()
             ->assertJson([
@@ -97,14 +112,22 @@ class NodeTelemetryApiTest extends TestCase
     }
 
     /**
-     * @param  array<string, string>  $nodeTokens
+     * @param  array<string, mixed>  $attributes
+     * @return array{node: Node, rawToken: string}
      */
-    private function configureNodeTelemetryAuth(array $nodeTokens = [], ?string $fallbackToken = 'shared-node-token'): void
+    private function createNodeWithRawToken(array $attributes = []): array
     {
-        config([
-            'services.node_telemetry.tokens' => $nodeTokens,
-            'services.node_telemetry.token' => $fallbackToken,
+        $rawToken = Node::generateToken();
+
+        $node = Node::factory()->create([
+            ...$attributes,
+            'token_hash' => Node::hashToken($rawToken),
         ]);
+
+        return [
+            'node' => $node,
+            'rawToken' => $rawToken,
+        ];
     }
 
     /**

@@ -33,9 +33,27 @@ Set environment variables:
 Required:
 
 - `NODE_ID` - Wings/orchestrator node identifier.
-- `NODE_TOKEN` - bearer token expected by orchestrator.
+- `NODE_TOKEN` - node telemetry bearer token issued by orchestrator when creating the node record.
 - `NODE_IP` - node IP for Minecraft status probes.
 - `ORCHESTRATOR_BASE_URL` - include API prefix, e.g. `http://orchestrator.localhost/api`.
+
+Create a node and get its one-time token from orchestrator (admin auth required):
+
+`POST /api/nodes`
+
+Example response excerpt:
+
+```json
+{
+  "data": {
+    "id": "node-1",
+    "name": "Frankfurt Wings Node",
+    "region": "eu.de",
+    "ip_address": "203.0.113.10",
+    "node_token": "one-time-raw-token"
+  }
+}
+```
 
 Optional:
 

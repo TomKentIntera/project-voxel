@@ -7,6 +7,7 @@ namespace App\Http\Controllers;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
+use Interadigital\CoreModels\Models\Node;
 use Interadigital\CoreModels\Models\TelemetryNode;
 use Interadigital\CoreModels\Models\TelemetryServer;
 use Symfony\Component\HttpFoundation\Response;
@@ -72,8 +73,24 @@ class NodeTelemetryController extends Controller
             );
         }
 
+        $this->touchNodeActivity($request, $telemetryTimestamp);
+
         return response()->json([
             'message' => 'Telemetry accepted.',
         ], Response::HTTP_ACCEPTED);
+    }
+
+    private function touchNodeActivity(Request $request, Carbon $telemetryTimestamp): void
+    {
+        $node = $request->attributes->get('node');
+
+        if (! ($node instanceof Node)) {
+            return;
+        }
+
+        $node->forceFill([
+            'last_active_at' => $telemetryTimestamp,
+            'last_used_at' => $telemetryTimestamp,
+        ])->save();
     }
 }
