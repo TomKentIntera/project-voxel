@@ -10,6 +10,10 @@ return new class extends Migration
 {
     public function up(): void
     {
+        if (Schema::hasTable('telemetry_server_sample')) {
+            return;
+        }
+
         Schema::create('telemetry_server_sample', function (Blueprint $table): void {
             $table->id();
             $table->string('server_id');
