@@ -7,7 +7,6 @@ use Interadigital\CoreAuth\Services\JwtService;
 use Interadigital\CoreModels\Models\Server;
 use Interadigital\CoreModels\Models\ServerEvent;
 use Interadigital\CoreModels\Models\TelemetryServer;
-use Interadigital\CoreModels\Models\TelemetryServerSample;
 use Interadigital\CoreModels\Models\User;
 use Tests\TestCase;
 
@@ -147,32 +146,36 @@ class ServerApiTest extends TestCase
             'players_online' => 15,
             'cpu_pct' => 47.25,
             'io_write_bytes_per_s' => 1500.0,
+            'created_at' => now()->subMinutes(2),
             'updated_at' => now()->subMinutes(2),
         ]);
 
-        TelemetryServerSample::query()->create([
+        TelemetryServer::factory()->create([
             'server_id' => $server->uuid,
             'node_id' => 'node-eu-1',
             'players_online' => 13,
             'cpu_pct' => 41.1,
             'io_write_bytes_per_s' => 1200.0,
-            'recorded_at' => now()->subHours(4),
+            'created_at' => now()->subHours(4),
+            'updated_at' => now()->subHours(4),
         ]);
-        TelemetryServerSample::query()->create([
+        TelemetryServer::factory()->create([
             'server_id' => $server->uuid,
             'node_id' => 'node-eu-1',
             'players_online' => 17,
             'cpu_pct' => 53.4,
             'io_write_bytes_per_s' => 1800.0,
-            'recorded_at' => now()->subMinutes(45),
+            'created_at' => now()->subMinutes(45),
+            'updated_at' => now()->subMinutes(45),
         ]);
-        TelemetryServerSample::query()->create([
+        TelemetryServer::factory()->create([
             'server_id' => $server->uuid,
             'node_id' => 'node-eu-1',
             'players_online' => 3,
             'cpu_pct' => 8.8,
             'io_write_bytes_per_s' => 250.0,
-            'recorded_at' => now()->subHours(30),
+            'created_at' => now()->subHours(30),
+            'updated_at' => now()->subHours(30),
         ]);
 
         $response = $this->withHeader('Authorization', 'Bearer '.$token)
@@ -196,7 +199,7 @@ class ServerApiTest extends TestCase
 
         /** @var list<array<string, mixed>> $samples */
         $samples = $response->json('data.performance_last_24h.samples');
-        $this->assertCount(2, $samples);
+        $this->assertCount(3, $samples);
     }
 
     public function test_show_returns_not_found_for_missing_server(): void

@@ -6,9 +6,7 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Interadigital\CoreModels\Models\Node;
 use Interadigital\CoreModels\Models\Server;
 use Interadigital\CoreModels\Models\TelemetryNode;
-use Interadigital\CoreModels\Models\TelemetryNodeSample;
 use Interadigital\CoreModels\Models\TelemetryServer;
-use Interadigital\CoreModels\Models\TelemetryServerSample;
 use Interadigital\CoreModels\Models\User;
 use Tests\TestCase;
 
@@ -105,26 +103,29 @@ class NodeApiTest extends TestCase
             'node_id' => $node->id,
             'cpu_pct' => 66.8,
             'iowait_pct' => 3.2,
+            'created_at' => now()->subMinutes(2),
             'updated_at' => now()->subMinutes(2),
         ]);
-
-        TelemetryNodeSample::query()->create([
+        TelemetryNode::factory()->create([
             'node_id' => $node->id,
             'cpu_pct' => 41.2,
             'iowait_pct' => 2.4,
-            'recorded_at' => now()->subHours(23),
+            'created_at' => now()->subHours(23),
+            'updated_at' => now()->subHours(23),
         ]);
-        TelemetryNodeSample::query()->create([
+        TelemetryNode::factory()->create([
             'node_id' => $node->id,
             'cpu_pct' => 59.7,
             'iowait_pct' => 1.8,
-            'recorded_at' => now()->subHours(1),
+            'created_at' => now()->subHours(1),
+            'updated_at' => now()->subHours(1),
         ]);
-        TelemetryNodeSample::query()->create([
+        TelemetryNode::factory()->create([
             'node_id' => $node->id,
             'cpu_pct' => 77.7,
             'iowait_pct' => 6.6,
-            'recorded_at' => now()->subHours(30),
+            'created_at' => now()->subHours(30),
+            'updated_at' => now()->subHours(30),
         ]);
 
         $owner = User::factory()->customer()->create();
@@ -167,7 +168,7 @@ class NodeApiTest extends TestCase
 
         /** @var list<array<string, mixed>> $samples */
         $samples = $response->json('data.performance_last_24h.samples');
-        $this->assertCount(2, $samples);
+        $this->assertCount(3, $samples);
 
         /** @var list<array<string, mixed>> $servers */
         $servers = $response->json('data.servers');
@@ -196,25 +197,14 @@ class NodeApiTest extends TestCase
             'node_id' => $node->id,
         ]);
 
-        TelemetryNodeSample::query()->create([
-            'node_id' => $node->id,
-            'cpu_pct' => 52.0,
-            'iowait_pct' => 1.1,
-            'recorded_at' => now()->subMinutes(10),
-        ]);
-
         TelemetryServer::factory()->create([
-            'server_id' => 'delete-me-server',
-            'node_id' => $node->id,
-        ]);
-
-        TelemetryServerSample::query()->create([
             'server_id' => 'delete-me-server',
             'node_id' => $node->id,
             'players_online' => 3,
             'cpu_pct' => 20.5,
             'io_write_bytes_per_s' => 1550.0,
-            'recorded_at' => now()->subMinutes(5),
+            'created_at' => now()->subMinutes(5),
+            'updated_at' => now()->subMinutes(5),
         ]);
 
         $this->withHeader('Authorization', 'Bearer '.$token)
@@ -226,9 +216,7 @@ class NodeApiTest extends TestCase
 
         $this->assertDatabaseMissing('nodes', ['id' => $node->id]);
         $this->assertDatabaseMissing('telemetry_node', ['node_id' => $node->id]);
-        $this->assertDatabaseMissing('telemetry_node_sample', ['node_id' => $node->id]);
         $this->assertDatabaseMissing('telemetry_server', ['node_id' => $node->id]);
-        $this->assertDatabaseMissing('telemetry_server_sample', ['node_id' => $node->id]);
     }
 
     private function authenticateAdmin(): string

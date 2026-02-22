@@ -12,9 +12,7 @@ use Illuminate\Support\Facades\DB;
 use Interadigital\CoreModels\Models\Node;
 use Interadigital\CoreModels\Models\Server;
 use Interadigital\CoreModels\Models\TelemetryNode;
-use Interadigital\CoreModels\Models\TelemetryNodeSample;
 use Interadigital\CoreModels\Models\TelemetryServer;
-use Interadigital\CoreModels\Models\TelemetryServerSample;
 use Interadigital\CoreModels\Models\User;
 use Symfony\Component\HttpFoundation\Response;
 
@@ -62,7 +60,10 @@ class NodeController extends Controller
         }
 
         $servers = $this->resolveNodeServers($id);
-        $latestTelemetry = TelemetryNode::find($id);
+        $latestTelemetry = TelemetryNode::query()
+            ->where('node_id', $id)
+            ->orderByDesc('created_at')
+            ->first();
 
         return response()->json([
             'data' => [
@@ -112,8 +113,6 @@ class NodeController extends Controller
         }
 
         DB::transaction(function () use ($id, $node): void {
-            TelemetryNodeSample::query()->where('node_id', $id)->delete();
-            TelemetryServerSample::query()->where('node_id', $id)->delete();
             TelemetryServer::query()->where('node_id', $id)->delete();
             TelemetryNode::query()->where('node_id', $id)->delete();
             $node->delete();
@@ -155,10 +154,10 @@ class NodeController extends Controller
         $windowStart = now()->subDay();
         $windowEnd = now();
 
-        $samples = TelemetryNodeSample::query()
+        $samples = TelemetryNode::query()
             ->where('node_id', $nodeId)
-            ->where('recorded_at', '>=', $windowStart)
-            ->orderBy('recorded_at')
+            ->where('created_at', '>=', $windowStart)
+            ->orderBy('created_at')
             ->get();
 
         /**
@@ -167,11 +166,11 @@ class NodeController extends Controller
         $bucketed = [];
 
         foreach ($samples as $sample) {
-            if (! ($sample->recorded_at instanceof Carbon)) {
+            if (! ($sample->created_at instanceof Carbon)) {
                 continue;
             }
 
-            $bucketStart = $sample->recorded_at->copy()->second(0);
+            $bucketStart = $sample->created_at->copy()->second(0);
             $bucketMinute = (int) floor($bucketStart->minute / 5) * 5;
             $bucketStart->minute($bucketMinute);
 
@@ -222,7 +221,7 @@ class NodeController extends Controller
                 'iowait_pct' => $latestTelemetry?->iowait_pct !== null
                     ? (float) $latestTelemetry->iowait_pct
                     : null,
-                'recorded_at' => $latestTelemetry?->updated_at?->toIso8601String(),
+                'recorded_at' => $latestTelemetry?->created_at?->toIso8601String(),
             ],
             'averages' => [
                 'cpu_pct' => $averageCpu,
@@ -253,8 +252,10 @@ class NodeController extends Controller
     {
         $telemetryServers = TelemetryServer::query()
             ->where('node_id', $nodeId)
-            ->orderBy('server_id')
-            ->get();
+            ->orderByDesc('created_at')
+            ->get()
+            ->unique('server_id')
+            ->values();
 
         if ($telemetryServers->isEmpty()) {
             return [];
@@ -282,7 +283,7 @@ class NodeController extends Controller
                 'players_online' => $telemetryServer->players_online,
                 'cpu_pct' => (float) $telemetryServer->cpu_pct,
                 'io_write_bytes_per_s' => (float) $telemetryServer->io_write_bytes_per_s,
-                'last_reported_at' => $telemetryServer->updated_at?->toIso8601String(),
+                'last_reported_at' => $telemetryServer->created_at?->toIso8601String(),
                 'server' => $linkedServerPayload,
             ];
         })->all();

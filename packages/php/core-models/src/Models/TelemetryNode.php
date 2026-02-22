@@ -7,7 +7,7 @@ namespace Interadigital\CoreModels\Models;
 use Illuminate\Database\Eloquent\Factories\Factory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
-use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Interadigital\CoreModels\Database\Factories\TelemetryNodeFactory;
 
 class TelemetryNode extends Model
@@ -18,21 +18,6 @@ class TelemetryNode extends Model
      * @var string
      */
     protected $table = 'telemetry_node';
-
-    /**
-     * @var string
-     */
-    protected $primaryKey = 'node_id';
-
-    /**
-     * @var bool
-     */
-    public $incrementing = false;
-
-    /**
-     * @var string
-     */
-    protected $keyType = 'string';
 
     /**
      * @var list<string>
@@ -55,11 +40,11 @@ class TelemetryNode extends Model
     }
 
     /**
-     * @return HasMany<TelemetryServer, $this>
+     * @return BelongsTo<Node, $this>
      */
-    public function servers(): HasMany
+    public function node(): BelongsTo
     {
-        return $this->hasMany(TelemetryServer::class, 'node_id', 'node_id');
+        return $this->belongsTo(Node::class, 'node_id', 'id');
     }
 
     protected static function newFactory(): Factory

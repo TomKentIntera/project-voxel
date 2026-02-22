@@ -20,21 +20,6 @@ class TelemetryServer extends Model
     protected $table = 'telemetry_server';
 
     /**
-     * @var string
-     */
-    protected $primaryKey = 'server_id';
-
-    /**
-     * @var bool
-     */
-    public $incrementing = false;
-
-    /**
-     * @var string
-     */
-    protected $keyType = 'string';
-
-    /**
      * @var list<string>
      */
     protected $fillable = [
@@ -58,11 +43,11 @@ class TelemetryServer extends Model
     }
 
     /**
-     * @return BelongsTo<TelemetryNode, $this>
+     * @return BelongsTo<Node, $this>
      */
     public function node(): BelongsTo
     {
-        return $this->belongsTo(TelemetryNode::class, 'node_id', 'node_id');
+        return $this->belongsTo(Node::class, 'node_id', 'id');
     }
 
     protected static function newFactory(): Factory

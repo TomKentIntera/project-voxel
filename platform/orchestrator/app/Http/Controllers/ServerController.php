@@ -10,7 +10,6 @@ use Illuminate\Support\Carbon;
 use Interadigital\CoreModels\Models\Server;
 use Interadigital\CoreModels\Models\ServerEvent;
 use Interadigital\CoreModels\Models\TelemetryServer;
-use Interadigital\CoreModels\Models\TelemetryServerSample;
 use Interadigital\CoreModels\Models\User;
 
 class ServerController extends Controller
@@ -156,13 +155,13 @@ class ServerController extends Controller
         /** @var TelemetryServer|null $latestTelemetry */
         $latestTelemetry = TelemetryServer::query()
             ->whereIn('server_id', $identifiers)
-            ->orderByDesc('updated_at')
+            ->orderByDesc('created_at')
             ->first();
 
-        $rawSamples = TelemetryServerSample::query()
+        $rawSamples = TelemetryServer::query()
             ->whereIn('server_id', $identifiers)
-            ->where('recorded_at', '>=', $windowStart)
-            ->orderBy('recorded_at')
+            ->where('created_at', '>=', $windowStart)
+            ->orderBy('created_at')
             ->get();
 
         /**
@@ -178,11 +177,11 @@ class ServerController extends Controller
         $bucketed = [];
 
         foreach ($rawSamples as $sample) {
-            if (! ($sample->recorded_at instanceof Carbon)) {
+            if (! ($sample->created_at instanceof Carbon)) {
                 continue;
             }
 
-            $bucketStart = $sample->recorded_at->copy()->second(0);
+            $bucketStart = $sample->created_at->copy()->second(0);
             $bucketMinute = (int) floor($bucketStart->minute / 5) * 5;
             $bucketStart->minute($bucketMinute);
 
@@ -254,7 +253,7 @@ class ServerController extends Controller
                     ? (float) $latestTelemetry->io_write_bytes_per_s
                     : null,
                 'node_id' => $latestTelemetry?->node_id,
-                'recorded_at' => $latestTelemetry?->updated_at?->toIso8601String(),
+                'recorded_at' => $latestTelemetry?->created_at?->toIso8601String(),
             ],
             'averages' => [
                 'players_online' => $averagePlayers,

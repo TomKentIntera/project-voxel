@@ -9,9 +9,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Interadigital\CoreModels\Models\Node;
 use Interadigital\CoreModels\Models\TelemetryNode;
-use Interadigital\CoreModels\Models\TelemetryNodeSample;
 use Interadigital\CoreModels\Models\TelemetryServer;
-use Interadigital\CoreModels\Models\TelemetryServerSample;
 use Symfony\Component\HttpFoundation\Response;
 
 class NodeTelemetryController extends Controller
@@ -41,25 +39,15 @@ class NodeTelemetryController extends Controller
             ? Carbon::parse((string) $validated['timestamp'])
             : now();
 
-        TelemetryNode::query()->upsert([
-            [
-                'node_id' => $node_id,
-                'cpu_pct' => (float) $validated['node']['cpu_pct'],
-                'iowait_pct' => (float) $validated['node']['iowait_pct'],
-                'created_at' => $telemetryTimestamp,
-                'updated_at' => $telemetryTimestamp,
-            ],
-        ], ['node_id'], ['cpu_pct', 'iowait_pct', 'updated_at']);
-
-        TelemetryNodeSample::query()->create([
+        TelemetryNode::query()->create([
             'node_id' => $node_id,
             'cpu_pct' => (float) $validated['node']['cpu_pct'],
             'iowait_pct' => (float) $validated['node']['iowait_pct'],
-            'recorded_at' => $telemetryTimestamp,
+            'created_at' => $telemetryTimestamp,
+            'updated_at' => $telemetryTimestamp,
         ]);
 
         $serversById = [];
-        $serverSamples = [];
 
         foreach ($validated['servers'] as $serverTelemetry) {
             $serverId = (string) $serverTelemetry['server_id'];
@@ -76,29 +64,10 @@ class NodeTelemetryController extends Controller
                 'created_at' => $telemetryTimestamp,
                 'updated_at' => $telemetryTimestamp,
             ];
-
-            $serverSamples[] = [
-                'server_id' => $serverId,
-                'node_id' => $node_id,
-                'players_online' => $playersOnline,
-                'cpu_pct' => $cpuPct,
-                'io_write_bytes_per_s' => $ioWriteBytesPerSecond,
-                'recorded_at' => $telemetryTimestamp,
-                'created_at' => $telemetryTimestamp,
-                'updated_at' => $telemetryTimestamp,
-            ];
         }
 
         if ($serversById !== []) {
-            TelemetryServer::query()->upsert(
-                array_values($serversById),
-                ['server_id'],
-                ['node_id', 'players_online', 'cpu_pct', 'io_write_bytes_per_s', 'updated_at']
-            );
-        }
-
-        if ($serverSamples !== []) {
-            TelemetryServerSample::query()->insert($serverSamples);
+            TelemetryServer::query()->insert(array_values($serversById));
         }
 
         $this->touchNodeActivity($request, $telemetryTimestamp);
