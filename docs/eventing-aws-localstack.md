@@ -20,10 +20,19 @@ Resources are provisioned via Terraform from:
 
 ## Local setup
 
-1. Start the stack (this runs Terraform for the event bus automatically):
+1. Start the stack:
 
 ```bash
 scripts/platform-start.sh
+```
+
+On first boot this provisions the LocalStack event bus via Terraform. On subsequent restarts,
+`platform-start.sh` detects existing SNS/SQS resources and skips Terraform apply.
+
+Force re-provisioning when needed:
+
+```bash
+scripts/platform-start.sh --force-provision
 ```
 
 2. Or run Terraform manually:
