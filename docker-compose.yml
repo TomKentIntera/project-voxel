@@ -24,8 +24,11 @@ services:
     environment:
       SERVICES: sns,sqs
       AWS_DEFAULT_REGION: us-east-1
+      PERSISTENCE: "1"
     ports:
       - "4566:4566"
+    volumes:
+      - localstack_data:/var/lib/localstack
     networks:
       - platform
 
@@ -329,6 +332,7 @@ networks:
 
 volumes:
   mysql_data:
+  localstack_data:
   backend_vendor:
   orchestrator_vendor:
   frontend_node_modules:

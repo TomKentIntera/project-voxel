@@ -43,6 +43,10 @@ npm run dev
 ./scripts/platform-start.sh
 ```
 
+`platform-start.sh` now reuses persisted LocalStack resources and skips Terraform event-bus
+provisioning when resources already exist. Use `--force-provision` to run Terraform apply
+again, or `--skip-provision` to bypass provisioning entirely.
+
 Start with the testing-only Wings container enabled:
 
 ```bash
