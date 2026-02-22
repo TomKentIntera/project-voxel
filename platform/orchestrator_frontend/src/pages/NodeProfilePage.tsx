@@ -38,6 +38,11 @@ function formatMetric(value: number | null, unit: string): string {
   return `${value.toFixed(2)} ${unit}`
 }
 
+function parseDateMs(value: string): number | null {
+  const timestampMs = new Date(value).getTime()
+  return Number.isFinite(timestampMs) ? timestampMs : null
+}
+
 function formatBytesPerSecond(value: number): string {
   if (value < 1024) return `${value.toFixed(0)} B/s`
   if (value < 1024 * 1024) return `${(value / 1024).toFixed(1)} KB/s`
@@ -92,15 +97,12 @@ function MetricLineChart({
   const maxValue = points.reduce((currentMax, point) => Math.max(currentMax, point.value), 0)
   const yMax = Math.max(10, Math.ceil(maxValue / 10) * 10)
 
-  let fromMs = new Date(from).getTime()
-  let toMs = new Date(to).getTime()
+  const firstPointMs = points.length > 0 ? points[0].timestampMs : 0
+  const lastPointMs =
+    points.length > 0 ? points[points.length - 1].timestampMs : firstPointMs + 24 * 60 * 60 * 1000
+  const fromMs = parseDateMs(from) ?? firstPointMs
+  let toMs = parseDateMs(to) ?? lastPointMs
 
-  if (!Number.isFinite(fromMs)) {
-    fromMs = Date.now() - 24 * 60 * 60 * 1000
-  }
-  if (!Number.isFinite(toMs)) {
-    toMs = Date.now()
-  }
   if (toMs <= fromMs) {
     toMs = fromMs + 1
   }
