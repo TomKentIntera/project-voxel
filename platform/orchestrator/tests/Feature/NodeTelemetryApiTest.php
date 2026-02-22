@@ -41,7 +41,7 @@ class NodeTelemetryApiTest extends TestCase
             ]);
     }
 
-    public function test_telemetry_endpoint_upserts_rows_by_primary_key(): void
+    public function test_telemetry_endpoint_stores_historical_rows(): void
     {
         ['rawToken' => $rawToken] = $this->createNodeWithRawToken([
             'id' => 'node-a',
@@ -73,15 +73,21 @@ class NodeTelemetryApiTest extends TestCase
             ->postJson('/api/internal/nodes/node-a/telemetry', $secondPayload)
             ->assertAccepted();
 
-        $this->assertDatabaseCount('telemetry_node', 1);
-        $this->assertDatabaseCount('telemetry_server', 2);
+        $this->assertDatabaseCount('telemetry_node', 2);
+        $this->assertDatabaseCount('telemetry_server', 4);
 
-        $node = TelemetryNode::find('node-a');
+        $node = TelemetryNode::query()
+            ->where('node_id', 'node-a')
+            ->orderByDesc('created_at')
+            ->first();
         $this->assertNotNull($node);
         $this->assertEqualsWithDelta(88.75, (float) $node->cpu_pct, 0.001);
         $this->assertEqualsWithDelta(4.25, (float) $node->iowait_pct, 0.001);
 
-        $firstServer = TelemetryServer::find('11111111-1111-1111-1111-111111111111');
+        $firstServer = TelemetryServer::query()
+            ->where('server_id', '11111111-1111-1111-1111-111111111111')
+            ->orderByDesc('created_at')
+            ->first();
         $this->assertNotNull($firstServer);
         $this->assertSame('node-a', $firstServer->node_id);
         $this->assertSame(42, $firstServer->players_online);

@@ -6,8 +6,10 @@ namespace App\Http\Controllers;
 
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Carbon;
 use Interadigital\CoreModels\Models\Server;
 use Interadigital\CoreModels\Models\ServerEvent;
+use Interadigital\CoreModels\Models\TelemetryServer;
 use Interadigital\CoreModels\Models\User;
 
 class ServerController extends Controller
@@ -115,8 +117,165 @@ class ServerController extends Controller
                 'events_count' => (int) ($server->events_count ?? 0),
                 'owner' => $this->transformUser($server->user),
                 'events' => $events,
+                'performance_last_24h' => $this->buildPerformanceWindow($server),
             ],
         ]);
+    }
+
+    /**
+     * @return array{
+     *   from: string,
+     *   to: string,
+     *   latest: array{
+     *     players_online: int|null,
+     *     cpu_pct: float|null,
+     *     io_write_bytes_per_s: float|null,
+     *     node_id: string|null,
+     *     recorded_at: string|null
+     *   },
+     *   averages: array{
+     *     players_online: float|null,
+     *     cpu_pct: float|null,
+     *     io_write_bytes_per_s: float|null
+     *   },
+     *   samples: list<array{
+     *     recorded_at: string,
+     *     players_online: float|null,
+     *     cpu_pct: float,
+     *     io_write_bytes_per_s: float
+     *   }>
+     * }
+     */
+    private function buildPerformanceWindow(Server $server): array
+    {
+        $windowStart = now()->subDay();
+        $windowEnd = now();
+        $identifiers = $this->resolveTelemetryServerIdentifiers($server);
+
+        /** @var TelemetryServer|null $latestTelemetry */
+        $latestTelemetry = TelemetryServer::query()
+            ->whereIn('server_id', $identifiers)
+            ->orderByDesc('created_at')
+            ->first();
+
+        $rawSamples = TelemetryServer::query()
+            ->whereIn('server_id', $identifiers)
+            ->where('created_at', '>=', $windowStart)
+            ->orderBy('created_at')
+            ->get();
+
+        /**
+         * @var array<string, array{
+         *   recorded_at: string,
+         *   players_total: float,
+         *   players_count: int,
+         *   cpu_total: float,
+         *   io_write_total: float,
+         *   count: int
+         * }>
+         */
+        $bucketed = [];
+
+        foreach ($rawSamples as $sample) {
+            if (! ($sample->created_at instanceof Carbon)) {
+                continue;
+            }
+
+            $bucketStart = $sample->created_at->copy()->second(0);
+            $bucketMinute = (int) floor($bucketStart->minute / 5) * 5;
+            $bucketStart->minute($bucketMinute);
+
+            $bucketKey = $bucketStart->toIso8601String();
+
+            if (! isset($bucketed[$bucketKey])) {
+                $bucketed[$bucketKey] = [
+                    'recorded_at' => $bucketKey,
+                    'players_total' => 0.0,
+                    'players_count' => 0,
+                    'cpu_total' => 0.0,
+                    'io_write_total' => 0.0,
+                    'count' => 0,
+                ];
+            }
+
+            if ($sample->players_online !== null) {
+                $bucketed[$bucketKey]['players_total'] += (float) $sample->players_online;
+                $bucketed[$bucketKey]['players_count']++;
+            }
+
+            $bucketed[$bucketKey]['cpu_total'] += (float) $sample->cpu_pct;
+            $bucketed[$bucketKey]['io_write_total'] += (float) $sample->io_write_bytes_per_s;
+            $bucketed[$bucketKey]['count']++;
+        }
+
+        ksort($bucketed);
+
+        $aggregatedSamples = array_map(
+            static fn (array $bucket): array => [
+                'recorded_at' => $bucket['recorded_at'],
+                'players_online' => $bucket['players_count'] > 0
+                    ? round($bucket['players_total'] / $bucket['players_count'], 2)
+                    : null,
+                'cpu_pct' => round($bucket['cpu_total'] / max($bucket['count'], 1), 3),
+                'io_write_bytes_per_s' => round($bucket['io_write_total'] / max($bucket['count'], 1), 3),
+            ],
+            array_values($bucketed),
+        );
+
+        $sampleCount = count($aggregatedSamples);
+
+        $averageCpu = $sampleCount > 0
+            ? round(array_sum(array_column($aggregatedSamples, 'cpu_pct')) / $sampleCount, 3)
+            : null;
+
+        $averageIoWrite = $sampleCount > 0
+            ? round(array_sum(array_column($aggregatedSamples, 'io_write_bytes_per_s')) / $sampleCount, 3)
+            : null;
+
+        $playerSamples = array_values(array_filter(
+            array_column($aggregatedSamples, 'players_online'),
+            static fn (mixed $value): bool => is_float($value) || is_int($value),
+        ));
+
+        $averagePlayers = $playerSamples !== []
+            ? round(array_sum($playerSamples) / count($playerSamples), 2)
+            : null;
+
+        return [
+            'from' => $windowStart->toIso8601String(),
+            'to' => $windowEnd->toIso8601String(),
+            'latest' => [
+                'players_online' => $latestTelemetry?->players_online,
+                'cpu_pct' => $latestTelemetry?->cpu_pct !== null
+                    ? (float) $latestTelemetry->cpu_pct
+                    : null,
+                'io_write_bytes_per_s' => $latestTelemetry?->io_write_bytes_per_s !== null
+                    ? (float) $latestTelemetry->io_write_bytes_per_s
+                    : null,
+                'node_id' => $latestTelemetry?->node_id,
+                'recorded_at' => $latestTelemetry?->created_at?->toIso8601String(),
+            ],
+            'averages' => [
+                'players_online' => $averagePlayers,
+                'cpu_pct' => $averageCpu,
+                'io_write_bytes_per_s' => $averageIoWrite,
+            ],
+            'samples' => $aggregatedSamples,
+        ];
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function resolveTelemetryServerIdentifiers(Server $server): array
+    {
+        $identifiers = [(string) $server->id];
+
+        if (is_string($server->uuid) && trim($server->uuid) !== '') {
+            $identifiers[] = $server->uuid;
+        }
+
+        return array_values(array_unique($identifiers));
     }
 
     /**

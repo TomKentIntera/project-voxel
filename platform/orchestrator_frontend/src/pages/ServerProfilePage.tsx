@@ -1,9 +1,13 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import Header from '../components/Header'
 import { useAuth } from '../context/useAuth'
 import { fetchServer } from '../lib/serversApi'
-import type { ServerEventItem, ServerProfile } from '../lib/serversApi'
+import type {
+  ServerEventItem,
+  ServerPerformanceSample,
+  ServerProfile,
+} from '../lib/serversApi'
 
 const statusBadge: Record<string, string> = {
   active: 'bg-emerald-50 text-emerald-700',
@@ -36,6 +40,200 @@ function formatDateTime(date: string | null): string {
     hour: 'numeric',
     minute: '2-digit',
   })
+}
+
+function parseDateMs(value: string): number | null {
+  const timestampMs = new Date(value).getTime()
+  return Number.isFinite(timestampMs) ? timestampMs : null
+}
+
+type MetricKind = 'percent' | 'count' | 'bytesPerSecond'
+
+function formatMetricValue(value: number | null, kind: MetricKind): string {
+  if (value === null) return '-'
+
+  if (kind === 'percent') {
+    return `${value.toFixed(2)}%`
+  }
+
+  if (kind === 'bytesPerSecond') {
+    return formatBytesPerSecond(value)
+  }
+
+  return value.toFixed(2)
+}
+
+function formatBytesPerSecond(value: number): string {
+  if (value < 1024) return `${value.toFixed(0)} B/s`
+  if (value < 1024 * 1024) return `${(value / 1024).toFixed(1)} KB/s`
+  if (value < 1024 * 1024 * 1024) return `${(value / (1024 * 1024)).toFixed(1)} MB/s`
+  return `${(value / (1024 * 1024 * 1024)).toFixed(2)} GB/s`
+}
+
+interface MetricLineChartProps {
+  title: string
+  kind: MetricKind
+  color: string
+  from: string
+  to: string
+  samples: ServerPerformanceSample[]
+  valueSelector: (sample: ServerPerformanceSample) => number | null
+}
+
+function MetricLineChart({
+  title,
+  kind,
+  color,
+  from,
+  to,
+  samples,
+  valueSelector,
+}: MetricLineChartProps) {
+  const points = useMemo(() => {
+    return samples
+      .map((sample) => {
+        const timestampMs = parseDateMs(sample.recorded_at)
+        const rawValue = valueSelector(sample)
+
+        if (timestampMs === null || rawValue === null || !Number.isFinite(rawValue)) {
+          return null
+        }
+
+        return { timestampMs, value: rawValue }
+      })
+      .filter((point): point is { timestampMs: number; value: number } => point !== null)
+      .sort((a, b) => a.timestampMs - b.timestampMs)
+  }, [samples, valueSelector])
+
+  const width = 720
+  const height = 240
+  const paddingLeft = 42
+  const paddingRight = 12
+  const paddingTop = 12
+  const paddingBottom = 28
+  const plotWidth = width - paddingLeft - paddingRight
+  const plotHeight = height - paddingTop - paddingBottom
+
+  const maxValue = points.reduce((currentMax, point) => Math.max(currentMax, point.value), 0)
+  const yMax = Math.max(10, Math.ceil(maxValue / 10) * 10)
+
+  const firstPointMs = points.length > 0 ? points[0].timestampMs : 0
+  const lastPointMs =
+    points.length > 0
+      ? points[points.length - 1].timestampMs
+      : firstPointMs + 24 * 60 * 60 * 1000
+  const fromMs = parseDateMs(from) ?? firstPointMs
+  let toMs = parseDateMs(to) ?? lastPointMs
+
+  if (toMs <= fromMs) {
+    toMs = fromMs + 1
+  }
+
+  const toX = (timestampMs: number): number =>
+    paddingLeft + ((timestampMs - fromMs) / (toMs - fromMs)) * plotWidth
+  const toY = (value: number): number =>
+    paddingTop + (1 - Math.min(Math.max(value, 0), yMax) / yMax) * plotHeight
+
+  const chartPoints = points.map((point) => ({
+    x: toX(point.timestampMs),
+    y: toY(point.value),
+    value: point.value,
+    timestampMs: point.timestampMs,
+  }))
+
+  const polylinePoints = chartPoints.map((point) => `${point.x},${point.y}`).join(' ')
+  const gridValues = Array.from({ length: 5 }, (_, index) => (yMax / 4) * index).reverse()
+
+  const latestPoint = points.length > 0 ? points[points.length - 1] : null
+  const average =
+    points.length > 0
+      ? points.reduce((total, point) => total + point.value, 0) / points.length
+      : null
+
+  return (
+    <div className="rounded-lg border border-slate-200 bg-slate-50 p-4">
+      <div className="mb-3 flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h4 className="text-sm font-semibold text-slate-900">{title}</h4>
+          <p className="text-xs text-slate-500">Last 24 hours</p>
+        </div>
+        <div className="text-right">
+          <p className="text-xs text-slate-500">Latest</p>
+          <p className="text-sm font-semibold text-slate-900">
+            {formatMetricValue(latestPoint?.value ?? null, kind)}
+          </p>
+        </div>
+      </div>
+
+      {chartPoints.length === 0 ? (
+        <p className="py-8 text-sm text-slate-500">
+          No telemetry samples available for this metric in the selected window.
+        </p>
+      ) : (
+        <svg
+          viewBox={`0 0 ${width} ${height}`}
+          role="img"
+          aria-label={`${title} line chart`}
+          className="w-full"
+        >
+          {gridValues.map((gridValue) => {
+            const y = toY(gridValue)
+            return (
+              <g key={`${title}-${gridValue}`}>
+                <line
+                  x1={paddingLeft}
+                  y1={y}
+                  x2={width - paddingRight}
+                  y2={y}
+                  stroke="#e2e8f0"
+                  strokeWidth={1}
+                />
+                <text
+                  x={4}
+                  y={y + 4}
+                  fill="#64748b"
+                  fontSize={10}
+                  fontFamily="ui-sans-serif, system-ui"
+                >
+                  {formatMetricValue(gridValue, kind)}
+                </text>
+              </g>
+            )
+          })}
+
+          <polyline
+            points={polylinePoints}
+            fill="none"
+            stroke={color}
+            strokeWidth={2.5}
+            strokeLinejoin="round"
+            strokeLinecap="round"
+          />
+
+          {chartPoints.map((point, index) => (
+            <circle
+              key={`${title}-${point.timestampMs}-${index}`}
+              cx={point.x}
+              cy={point.y}
+              r={3}
+              fill={color}
+            />
+          ))}
+        </svg>
+      )}
+
+      <div className="mt-2 flex items-center justify-between text-xs text-slate-500">
+        <span>{formatDateTime(from)}</span>
+        <span>{formatDateTime(to)}</span>
+      </div>
+      <p className="mt-1 text-xs text-slate-500">
+        Average:{' '}
+        <span className="font-medium text-slate-700">
+          {formatMetricValue(average, kind)}
+        </span>
+      </p>
+    </div>
+  )
 }
 
 function formatMetaValue(value: unknown): string {
@@ -293,6 +491,91 @@ export default function ServerProfilePage() {
               </dd>
             </div>
           </dl>
+        </div>
+
+        <div className="mt-8 rounded-xl border border-slate-200 bg-white p-6">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <h3 className="text-base font-semibold text-slate-900">
+                Performance (Last 24 Hours)
+              </h3>
+              <p className="text-sm text-slate-500">
+                {server.performance_last_24h.samples.length === 0
+                  ? 'No telemetry samples in this window.'
+                  : `${server.performance_last_24h.samples.length} sample${server.performance_last_24h.samples.length === 1 ? '' : 's'} captured from ${formatDateTime(server.performance_last_24h.from)} to ${formatDateTime(server.performance_last_24h.to)}.`}
+              </p>
+            </div>
+            <div className="text-right text-xs text-slate-500">
+              <p>Node: {server.performance_last_24h.latest.node_id ?? '-'}</p>
+              <p>
+                Latest at{' '}
+                {formatDateTime(server.performance_last_24h.latest.recorded_at)}
+              </p>
+            </div>
+          </div>
+
+          <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-3">
+            <div className="rounded-lg border border-slate-200 bg-slate-50 p-4">
+              <p className="text-xs font-medium uppercase tracking-wider text-slate-500">
+                Latest Players
+              </p>
+              <p className="mt-1 text-lg font-semibold text-slate-900">
+                {formatMetricValue(
+                  server.performance_last_24h.latest.players_online,
+                  'count',
+                )}
+              </p>
+            </div>
+            <div className="rounded-lg border border-slate-200 bg-slate-50 p-4">
+              <p className="text-xs font-medium uppercase tracking-wider text-slate-500">
+                Latest CPU
+              </p>
+              <p className="mt-1 text-lg font-semibold text-slate-900">
+                {formatMetricValue(server.performance_last_24h.latest.cpu_pct, 'percent')}
+              </p>
+            </div>
+            <div className="rounded-lg border border-slate-200 bg-slate-50 p-4">
+              <p className="text-xs font-medium uppercase tracking-wider text-slate-500">
+                Latest Write I/O
+              </p>
+              <p className="mt-1 text-lg font-semibold text-slate-900">
+                {formatMetricValue(
+                  server.performance_last_24h.latest.io_write_bytes_per_s,
+                  'bytesPerSecond',
+                )}
+              </p>
+            </div>
+          </div>
+
+          <div className="mt-5 grid grid-cols-1 gap-4 xl:grid-cols-3">
+            <MetricLineChart
+              title="Players Online"
+              kind="count"
+              color="#16a34a"
+              from={server.performance_last_24h.from}
+              to={server.performance_last_24h.to}
+              samples={server.performance_last_24h.samples}
+              valueSelector={(sample) => sample.players_online}
+            />
+            <MetricLineChart
+              title="CPU Usage"
+              kind="percent"
+              color="#4f46e5"
+              from={server.performance_last_24h.from}
+              to={server.performance_last_24h.to}
+              samples={server.performance_last_24h.samples}
+              valueSelector={(sample) => sample.cpu_pct}
+            />
+            <MetricLineChart
+              title="Write I/O"
+              kind="bytesPerSecond"
+              color="#d97706"
+              from={server.performance_last_24h.from}
+              to={server.performance_last_24h.to}
+              samples={server.performance_last_24h.samples}
+              valueSelector={(sample) => sample.io_write_bytes_per_s}
+            />
+          </div>
         </div>
 
         <div className="mt-8 rounded-xl border border-slate-200 bg-white">

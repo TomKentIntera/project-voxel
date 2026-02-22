@@ -39,6 +39,7 @@ Route::middleware(['auth.jwt', 'admin'])->group(function (): void {
     Route::get('/nodes', [NodeController::class, 'index']);
     Route::get('/nodes/{id}', [NodeController::class, 'show']);
     Route::post('/nodes', [NodeController::class, 'store']);
+    Route::delete('/nodes/{id}', [NodeController::class, 'destroy']);
     Route::get('/regional-proxies', [RegionalProxyController::class, 'index']);
     Route::get('/regional-proxies/{id}', [RegionalProxyController::class, 'show']);
     Route::post('/regional-proxies', [RegionalProxyController::class, 'store']);

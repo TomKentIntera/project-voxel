@@ -39,38 +39,35 @@ class NodeTelemetryController extends Controller
             ? Carbon::parse((string) $validated['timestamp'])
             : now();
 
-        TelemetryNode::query()->upsert([
-            [
-                'node_id' => $node_id,
-                'cpu_pct' => (float) $validated['node']['cpu_pct'],
-                'iowait_pct' => (float) $validated['node']['iowait_pct'],
-                'created_at' => $telemetryTimestamp,
-                'updated_at' => $telemetryTimestamp,
-            ],
-        ], ['node_id'], ['cpu_pct', 'iowait_pct', 'updated_at']);
+        TelemetryNode::query()->create([
+            'node_id' => $node_id,
+            'cpu_pct' => (float) $validated['node']['cpu_pct'],
+            'iowait_pct' => (float) $validated['node']['iowait_pct'],
+            'created_at' => $telemetryTimestamp,
+            'updated_at' => $telemetryTimestamp,
+        ]);
 
         $serversById = [];
 
         foreach ($validated['servers'] as $serverTelemetry) {
             $serverId = (string) $serverTelemetry['server_id'];
+            $playersOnline = $serverTelemetry['players_online'] ?? null;
+            $cpuPct = (float) $serverTelemetry['cpu_pct'];
+            $ioWriteBytesPerSecond = (float) $serverTelemetry['io_write_bytes_per_s'];
 
             $serversById[$serverId] = [
                 'server_id' => $serverId,
                 'node_id' => $node_id,
-                'players_online' => $serverTelemetry['players_online'] ?? null,
-                'cpu_pct' => (float) $serverTelemetry['cpu_pct'],
-                'io_write_bytes_per_s' => (float) $serverTelemetry['io_write_bytes_per_s'],
+                'players_online' => $playersOnline,
+                'cpu_pct' => $cpuPct,
+                'io_write_bytes_per_s' => $ioWriteBytesPerSecond,
                 'created_at' => $telemetryTimestamp,
                 'updated_at' => $telemetryTimestamp,
             ];
         }
 
         if ($serversById !== []) {
-            TelemetryServer::query()->upsert(
-                array_values($serversById),
-                ['server_id'],
-                ['node_id', 'players_online', 'cpu_pct', 'io_write_bytes_per_s', 'updated_at']
-            );
+            TelemetryServer::query()->insert(array_values($serversById));
         }
 
         $this->touchNodeActivity($request, $telemetryTimestamp);

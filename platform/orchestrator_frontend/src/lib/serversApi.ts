@@ -58,6 +58,31 @@ export interface ServerEventItem {
   created_at: string | null
 }
 
+export interface ServerPerformanceSample {
+  recorded_at: string
+  players_online: number | null
+  cpu_pct: number
+  io_write_bytes_per_s: number
+}
+
+export interface ServerPerformanceWindow {
+  from: string
+  to: string
+  latest: {
+    players_online: number | null
+    cpu_pct: number | null
+    io_write_bytes_per_s: number | null
+    node_id: string | null
+    recorded_at: string | null
+  }
+  averages: {
+    players_online: number | null
+    cpu_pct: number | null
+    io_write_bytes_per_s: number | null
+  }
+  samples: ServerPerformanceSample[]
+}
+
 export interface ServerProfile {
   id: number
   uuid: string
@@ -73,6 +98,7 @@ export interface ServerProfile {
   events_count: number
   owner: ServerOwner | null
   events: ServerEventItem[]
+  performance_last_24h: ServerPerformanceWindow
 }
 
 interface ServerProfileResponse {

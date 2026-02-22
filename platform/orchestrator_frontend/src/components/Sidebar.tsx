@@ -36,6 +36,15 @@ const navigation: NavItem[] = [
     ),
   },
   {
+    label: 'Nodes',
+    to: '/nodes',
+    icon: (
+      <svg className="size-5" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+        <path strokeLinecap="round" strokeLinejoin="round" d="M6.75 3.75h10.5a3 3 0 0 1 3 3v2.25a3 3 0 0 1-3 3H6.75a3 3 0 0 1-3-3V6.75a3 3 0 0 1 3-3Zm0 8.25h10.5a3 3 0 0 1 3 3v2.25a3 3 0 0 1-3 3H6.75a3 3 0 0 1-3-3V15a3 3 0 0 1 3-3Zm3.75-4.5h.008v.008H10.5V7.5Zm0 8.25h.008v.008H10.5v-.008Z" />
+      </svg>
+    ),
+  },
+  {
     label: 'Jobs',
     to: '/jobs',
     icon: (
