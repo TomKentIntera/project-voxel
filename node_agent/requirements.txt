@@ -1,0 +1,1 @@
+# stdlib-only agent; no external dependencies required
