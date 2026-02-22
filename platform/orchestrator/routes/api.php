@@ -4,6 +4,7 @@ use App\Http\Controllers\AdminAuthController;
 use App\Http\Controllers\BannerController;
 use App\Http\Controllers\FaqController;
 use App\Http\Controllers\MetricsController;
+use App\Http\Controllers\NodeTelemetryController;
 use App\Http\Controllers\PlanController;
 use App\Http\Controllers\RegionalProxyController;
 use App\Http\Controllers\ServerController;
@@ -25,6 +26,10 @@ Route::middleware(['regional-proxy.auth'])->group(function (): void {
     Route::get('/regional-proxies/mappings', [RegionalProxyController::class, 'mappings']);
     Route::get('/regional-proxies/{id}/mappings', [RegionalProxyController::class, 'mappingsById'])
         ->whereNumber('id');
+});
+
+Route::middleware(['node.telemetry.auth'])->group(function (): void {
+    Route::post('/internal/nodes/{node_id}/telemetry', [NodeTelemetryController::class, 'store']);
 });
 
 Route::middleware(['auth.jwt', 'admin'])->group(function (): void {
