@@ -4,6 +4,8 @@ use App\Http\Controllers\AdminAuthController;
 use App\Http\Controllers\BannerController;
 use App\Http\Controllers\FaqController;
 use App\Http\Controllers\MetricsController;
+use App\Http\Controllers\NodeController;
+use App\Http\Controllers\NodeTelemetryController;
 use App\Http\Controllers\PlanController;
 use App\Http\Controllers\RegionalProxyController;
 use App\Http\Controllers\ServerController;
@@ -27,9 +29,16 @@ Route::middleware(['regional-proxy.auth'])->group(function (): void {
         ->whereNumber('id');
 });
 
+Route::middleware(['node.telemetry.auth'])->group(function (): void {
+    Route::post('/internal/nodes/{node_id}/telemetry', [NodeTelemetryController::class, 'store']);
+});
+
 Route::middleware(['auth.jwt', 'admin'])->group(function (): void {
     Route::get('/servers', [ServerController::class, 'index']);
     Route::get('/servers/{id}', [ServerController::class, 'show']);
+    Route::get('/nodes', [NodeController::class, 'index']);
+    Route::get('/nodes/{id}', [NodeController::class, 'show']);
+    Route::post('/nodes', [NodeController::class, 'store']);
     Route::get('/regional-proxies', [RegionalProxyController::class, 'index']);
     Route::get('/regional-proxies/{id}', [RegionalProxyController::class, 'show']);
     Route::post('/regional-proxies', [RegionalProxyController::class, 'store']);

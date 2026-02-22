@@ -1,6 +1,7 @@
 <?php
 
 use Interadigital\CoreAuth\Console\Commands\PurgeExpiredAuthTokens;
+use App\Http\Middleware\AuthenticateNodeTelemetryToken;
 use App\Http\Middleware\AuthenticateRegionalProxyToken;
 use App\Http\Middleware\EnsureUserIsAdmin;
 use Interadigital\CoreAuth\Http\Middleware\AuthenticateWithJwt;
@@ -20,6 +21,7 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->alias([
             'auth.jwt' => AuthenticateWithJwt::class,
             'admin' => EnsureUserIsAdmin::class,
+            'node.telemetry.auth' => AuthenticateNodeTelemetryToken::class,
             'regional-proxy.auth' => AuthenticateRegionalProxyToken::class,
         ]);
     })
