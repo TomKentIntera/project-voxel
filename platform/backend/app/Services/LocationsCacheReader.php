@@ -6,6 +6,8 @@ namespace App\Services;
 
 use Illuminate\Contracts\Cache\Repository as CacheRepository;
 use Illuminate\Support\Facades\Storage;
+use Interadigital\CoreModels\Enums\ServerEventType;
+use Interadigital\CoreModels\Models\ServerEvent;
 use Throwable;
 
 class LocationsCacheReader
@@ -45,10 +47,12 @@ class LocationsCacheReader
      */
     private function cachedPayload(): array
     {
+        $this->invalidateCacheWhenRelevantEventChanged();
+
         $cacheTtlSeconds = max(1, (int) config('services.locations_cache.ttl_seconds', 60));
 
         return $this->cache->remember(
-            $this->cacheKey(),
+            $this->payloadCacheKey(),
             now()->addSeconds($cacheTtlSeconds),
             fn (): array => $this->readPayloadFromStorage(),
         );
@@ -81,11 +85,52 @@ class LocationsCacheReader
         return is_array($decoded) ? $decoded : [];
     }
 
-    private function cacheKey(): string
+    private function invalidateCacheWhenRelevantEventChanged(): void
+    {
+        $latestEventId = $this->latestLifecycleEventId();
+        $versionKey = $this->versionCacheKey();
+        $knownVersion = (int) $this->cache->get($versionKey, 0);
+
+        if ($knownVersion === $latestEventId) {
+            return;
+        }
+
+        $this->cache->forget($this->payloadCacheKey());
+        $this->cache->forever($versionKey, $latestEventId);
+    }
+
+    private function payloadCacheKey(): string
     {
         $disk = (string) config('services.locations_cache.disk', 'locations_cache');
         $path = trim((string) config('services.locations_cache.path', 'locations.json'));
 
         return sprintf('plans.locations-cache.%s.%s', $disk, md5($path));
+    }
+
+    private function versionCacheKey(): string
+    {
+        return 'plans.locations-cache.version.server-lifecycle';
+    }
+
+    private function latestLifecycleEventId(): int
+    {
+        try {
+            return (int) ServerEvent::query()
+                ->whereIn('type', $this->cacheInvalidationEventTypes())
+                ->max('id');
+        } catch (Throwable) {
+            return 0;
+        }
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function cacheInvalidationEventTypes(): array
+    {
+        return [
+            ServerEventType::SERVER_PROVISIONED->value,
+            'server.migrated',
+        ];
     }
 }
