@@ -60,6 +60,19 @@ return [
             'report' => false,
         ],
 
+        'locations_cache' => [
+            'driver' => env('LOCATIONS_CACHE_DRIVER', 'local'),
+            'root' => env('LOCATIONS_CACHE_LOCAL_ROOT') ?: storage_path('app'),
+            'key' => env('LOCATIONS_CACHE_AWS_ACCESS_KEY_ID'),
+            'secret' => env('LOCATIONS_CACHE_AWS_SECRET_ACCESS_KEY'),
+            'region' => env('LOCATIONS_CACHE_AWS_DEFAULT_REGION', 'us-east-1'),
+            'bucket' => env('LOCATIONS_CACHE_AWS_BUCKET'),
+            'endpoint' => env('LOCATIONS_CACHE_AWS_ENDPOINT'),
+            'use_path_style_endpoint' => env('LOCATIONS_CACHE_AWS_USE_PATH_STYLE_ENDPOINT', true),
+            'throw' => false,
+            'report' => false,
+        ],
+
     ],
 
     /*

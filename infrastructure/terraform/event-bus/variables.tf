@@ -46,6 +46,18 @@ variable "dead_letter_queue_name" {
   default     = "server-orders-orchestrator-dlq"
 }
 
+variable "lifecycle_queue_name" {
+  description = "SQS queue name consumed by backend lifecycle invalidation worker."
+  type        = string
+  default     = "server-lifecycle-backend"
+}
+
+variable "lifecycle_dead_letter_queue_name" {
+  description = "SQS dead-letter queue name for backend lifecycle worker."
+  type        = string
+  default     = "server-lifecycle-backend-dlq"
+}
+
 variable "max_receive_count" {
   description = "How many receive attempts before moving a message to the DLQ."
   type        = number

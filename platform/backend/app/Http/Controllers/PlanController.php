@@ -4,17 +4,22 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers;
 
+use App\Services\LocationsCacheReader;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
 class PlanController extends Controller
 {
+    public function __construct(
+        private readonly LocationsCacheReader $locationsCacheReader
+    ) {}
+
     /**
      * Return all available plans with public-facing data.
      */
     public function index(): JsonResponse
     {
-        $locationsCache = $this->getLocationsCache();
+        $locationsCache = $this->locationsCacheReader->maxFreeMemoryByLocationShortCode();
 
         $plans = collect(config('plans.planList'))->map(function (array $plan) use ($locationsCache): array {
             $availability = [];
@@ -66,30 +71,6 @@ class PlanController extends Controller
             'planRecommender' => config('plans.planRecommender'),
             'modpacks' => $modpacks,
         ]);
-    }
-
-    /**
-     * Read the cached locations JSON and build a map of
-     * ptero location short code → maxFreeMemory (MB).
-     *
-     * @return array<string, int>
-     */
-    private function getLocationsCache(): array
-    {
-        $map = [];
-        $path = storage_path('app/locations.json');
-
-        if (! file_exists($path)) {
-            return $map;
-        }
-
-        $raw = json_decode(file_get_contents($path), true);
-
-        foreach ($raw['locations'] ?? [] as $loc) {
-            $map[$loc['short']] = (int) ($loc['maxFreeMemory'] ?? 0);
-        }
-
-        return $map;
     }
 
     /**

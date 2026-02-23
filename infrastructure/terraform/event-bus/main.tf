@@ -68,3 +68,50 @@ resource "aws_sns_topic_subscription" "server_orders_orchestrator" {
     aws_sqs_queue_policy.server_orders_orchestrator,
   ]
 }
+
+resource "aws_sqs_queue" "server_lifecycle_backend_dlq" {
+  name = var.lifecycle_dead_letter_queue_name
+}
+
+resource "aws_sqs_queue" "server_lifecycle_backend" {
+  name = var.lifecycle_queue_name
+
+  redrive_policy = jsonencode({
+    deadLetterTargetArn = aws_sqs_queue.server_lifecycle_backend_dlq.arn
+    maxReceiveCount     = var.max_receive_count
+  })
+}
+
+resource "aws_sqs_queue_policy" "server_lifecycle_backend" {
+  queue_url = aws_sqs_queue.server_lifecycle_backend.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid       = "AllowSnsPublish"
+        Effect    = "Allow"
+        Principal = { Service = "sns.amazonaws.com" }
+        Action    = "sqs:SendMessage"
+        Resource  = aws_sqs_queue.server_lifecycle_backend.arn
+        Condition = {
+          ArnEquals = {
+            "aws:SourceArn" = aws_sns_topic.server_orders.arn
+          }
+        }
+      }
+    ]
+  })
+}
+
+resource "aws_sns_topic_subscription" "server_lifecycle_backend" {
+  topic_arn = aws_sns_topic.server_orders.arn
+  protocol  = "sqs"
+  endpoint  = aws_sqs_queue.server_lifecycle_backend.arn
+
+  raw_message_delivery = true
+
+  depends_on = [
+    aws_sqs_queue_policy.server_lifecycle_backend,
+  ]
+}

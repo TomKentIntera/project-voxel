@@ -72,6 +72,7 @@ ensure_pterodactyl_database
 is_event_bus_provisioned() {
   topic_name="${EVENT_BUS_TOPIC_NAME:-server-orders}"
   queue_name="${EVENT_BUS_QUEUE_NAME:-server-orders-orchestrator}"
+  lifecycle_queue_name="${EVENT_BUS_LIFECYCLE_QUEUE_NAME:-server-lifecycle-backend}"
   aws_region="${AWS_DEFAULT_REGION:-us-east-1}"
   topic_arn="arn:aws:sns:${aws_region}:000000000000:${topic_name}"
 
@@ -80,6 +81,10 @@ is_event_bus_provisioned() {
   fi
 
   if ! docker compose exec -T localstack awslocal sqs get-queue-url --queue-name "$queue_name" >/dev/null 2>&1; then
+    return 1
+  fi
+
+  if ! docker compose exec -T localstack awslocal sqs get-queue-url --queue-name "$lifecycle_queue_name" >/dev/null 2>&1; then
     return 1
   fi
 
@@ -104,6 +109,8 @@ echo "API:       http://api.localhost"
 echo "Orchestrator: http://orchestrator.localhost"
 echo "Storybook: http://storybook.localhost"
 echo "Panel:     http://panel.localhost"
+echo "MinIO API: http://127.0.0.1:9000"
+echo "MinIO UI:  http://127.0.0.1:9001"
 if [ "$with_wings" = "true" ]; then
   echo "Wings API: http://127.0.0.1:8080"
   echo "Wings SFTP: sftp://127.0.0.1:2022"

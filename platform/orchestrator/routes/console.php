@@ -1,5 +1,6 @@
 <?php
 
+use App\Jobs\UpdateLocationFreeSpaceJob;
 use App\Services\EventBus\ServerOrderedConsumer;
 use App\Services\Metrics\ResourceConsumptionCacheService;
 use Illuminate\Foundation\Inspiring;
@@ -35,6 +36,14 @@ Artisan::command('metrics:cache-resource-consumption', function (ResourceConsump
 
     return ConsoleCommand::SUCCESS;
 })->purpose('Cache overall resource consumption for dashboard');
+
+Artisan::command('pterodactyl:update-location-free-space', function (): int {
+    UpdateLocationFreeSpaceJob::dispatchSync();
+
+    $this->info('Updated Pterodactyl location and node free-space cache.');
+
+    return ConsoleCommand::SUCCESS;
+})->purpose('Cache free memory values for Pterodactyl locations and nodes');
 
 Artisan::command(
     'events:consume-server-ordered {--once : Consume one receive batch and exit} {--max-messages=10 : Max SQS messages per poll} {--wait=20 : SQS long-poll wait seconds} {--sleep=2 : Idle sleep seconds between polls}',
