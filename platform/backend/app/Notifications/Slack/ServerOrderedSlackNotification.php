@@ -13,16 +13,12 @@ final class ServerOrderedSlackNotification extends AbstractSlackNotification
 
     public function channel(): string
     {
-        $serverOrderedChannel = trim((string) config(
-            'services.slack.notifications.channels.server_ordered',
-            config('services.slack.notifications.channel', ''),
-        ));
-
-        if ($serverOrderedChannel !== '') {
-            return $serverOrderedChannel;
+        $ordersChannel = trim((string) config('slack.channels.orders', ''));
+        if ($ordersChannel !== '') {
+            return $ordersChannel;
         }
 
-        return trim((string) config('services.slack.notifications.channel', ''));
+        return trim((string) config('slack.channels.servers', ''));
     }
 
     public function content(): string
