@@ -57,6 +57,18 @@ else
   docker compose up -d
 fi
 
+ensure_pterodactyl_database() {
+  echo "Ensuring shared MySQL has the pterodactyl schema..."
+  docker compose exec -T mysql mysql -uroot -psecret <<'SQL'
+CREATE DATABASE IF NOT EXISTS `pterodactyl` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+CREATE USER IF NOT EXISTS 'pterodactyl'@'%' IDENTIFIED BY 'secret';
+GRANT ALL PRIVILEGES ON `pterodactyl`.* TO 'pterodactyl'@'%';
+FLUSH PRIVILEGES;
+SQL
+}
+
+ensure_pterodactyl_database
+
 is_event_bus_provisioned() {
   topic_name="${EVENT_BUS_TOPIC_NAME:-server-orders}"
   queue_name="${EVENT_BUS_QUEUE_NAME:-server-orders-orchestrator}"
