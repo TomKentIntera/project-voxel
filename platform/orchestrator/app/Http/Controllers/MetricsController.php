@@ -6,6 +6,7 @@ namespace App\Http\Controllers;
 
 use App\Metrics\JobsCount;
 use App\Metrics\Metric;
+use App\Metrics\ResourceConsumptionLastHour;
 use App\Metrics\RevenueMonthly;
 use App\Metrics\ServersCount;
 use App\Metrics\UsersCount;
@@ -24,6 +25,7 @@ class MetricsController extends Controller
         ServersCount::class,
         UsersCount::class,
         JobsCount::class,
+        ResourceConsumptionLastHour::class,
         RevenueMonthly::class,
     ];
 
