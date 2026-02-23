@@ -28,6 +28,7 @@ return Application::configure(basePath: dirname(__DIR__))
     ->withSchedule(function (Schedule $schedule): void {
         $schedule->command(PurgeExpiredAuthTokens::class)->daily();
         $schedule->command('telemetry:purge-stale')->hourly();
+        $schedule->command('metrics:cache-resource-consumption')->everyFifteenMinutes();
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         //

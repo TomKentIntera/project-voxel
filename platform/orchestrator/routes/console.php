@@ -1,6 +1,7 @@
 <?php
 
 use App\Services\EventBus\ServerOrderedConsumer;
+use App\Services\Metrics\ResourceConsumptionCacheService;
 use Illuminate\Foundation\Inspiring;
 use Illuminate\Support\Facades\Artisan;
 use Interadigital\CoreModels\Models\TelemetryNode;
@@ -26,6 +27,14 @@ Artisan::command('telemetry:purge-stale', function (): int {
 
     return ConsoleCommand::SUCCESS;
 })->purpose('Delete telemetry rows older than 24 hours');
+
+Artisan::command('metrics:cache-resource-consumption', function (ResourceConsumptionCacheService $service): int {
+    $value = $service->refreshLastHourConsumptionPercent();
+
+    $this->info(sprintf('Cached last-hour resource consumption at %.2f%%.', $value));
+
+    return ConsoleCommand::SUCCESS;
+})->purpose('Cache overall resource consumption for dashboard');
 
 Artisan::command(
     'events:consume-server-ordered {--once : Consume one receive batch and exit} {--max-messages=10 : Max SQS messages per poll} {--wait=20 : SQS long-poll wait seconds} {--sleep=2 : Idle sleep seconds between polls}',
