@@ -7,14 +7,14 @@ namespace App\Notifications\Slack;
 final class TextSlackNotification extends AbstractSlackNotification
 {
     public function __construct(
-        private readonly string $destinationChannelId,
+        private readonly string $channel,
         private readonly string $content,
     ) {
     }
 
-    public function destinationChannelId(): string
+    public function channel(): string
     {
-        return $this->destinationChannelId;
+        return $this->channel;
     }
 
     public function content(): string

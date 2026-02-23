@@ -6,7 +6,7 @@ namespace App\Notifications\Slack;
 
 abstract class AbstractSlackNotification
 {
-    abstract public function destinationChannelId(): string;
+    abstract public function channel(): string;
 
     abstract public function content(): string;
 }

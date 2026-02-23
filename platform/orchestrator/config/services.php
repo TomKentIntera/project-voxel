@@ -32,6 +32,13 @@ return [
         'notifications' => [
             'bot_user_oauth_token' => env('SLACK_BOT_USER_OAUTH_TOKEN'),
             'channel' => env('SLACK_BOT_USER_DEFAULT_CHANNEL'),
+            'channels' => [
+                'default' => env('SLACK_BOT_USER_DEFAULT_CHANNEL'),
+                'server_ordered' => env(
+                    'SLACK_BOT_USER_SERVER_ORDERED_CHANNEL',
+                    env('SLACK_BOT_USER_DEFAULT_CHANNEL'),
+                ),
+            ],
         ],
     ],
 

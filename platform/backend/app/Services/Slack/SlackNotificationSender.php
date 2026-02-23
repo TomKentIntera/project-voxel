@@ -15,7 +15,7 @@ class SlackNotificationSender
 
     public function send(AbstractSlackNotification $notification): void
     {
-        $channelId = trim($notification->destinationChannelId());
+        $channelId = trim($notification->channel());
         if ($channelId === '') {
             throw new InvalidArgumentException('Slack destination channel ID is required.');
         }

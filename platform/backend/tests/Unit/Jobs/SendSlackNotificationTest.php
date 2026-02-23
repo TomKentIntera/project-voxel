@@ -32,7 +32,7 @@ class SendSlackNotificationTest extends TestCase
         Queue::assertPushed(
             SendSlackNotification::class,
             static function (SendSlackNotification $job): bool {
-                return $job->notification->destinationChannelId() === 'C1234567890'
+                return $job->notification->channel() === 'C1234567890'
                     && $job->notification->content() === 'Node capacity warning.';
             }
         );
