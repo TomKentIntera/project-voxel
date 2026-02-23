@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Interadigital\CoreSlack\Transport;
+namespace Interadigital\CoreNotifications\Transport;
 
 final class SlackTransportMessage
 {

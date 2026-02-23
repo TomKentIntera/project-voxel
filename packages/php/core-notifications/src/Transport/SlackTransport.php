@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Interadigital\CoreSlack\Transport;
+namespace Interadigital\CoreNotifications\Transport;
 
 use Illuminate\Support\Facades\Http;
 use InvalidArgumentException;

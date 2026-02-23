@@ -1,6 +1,6 @@
 {
-    "name": "interadigital/core-slack",
-    "description": "Shared Slack transport primitives for Interadigital services.",
+    "name": "interadigital/core-notifications",
+    "description": "Shared notification transport primitives for Interadigital services.",
     "license": "proprietary",
     "type": "library",
     "version": "1.0.0",
@@ -10,13 +10,13 @@
     },
     "autoload": {
         "psr-4": {
-            "Interadigital\\CoreSlack\\": "src/"
+            "Interadigital\\CoreNotifications\\": "src/"
         }
     },
     "extra": {
         "laravel": {
             "providers": [
-                "Interadigital\\CoreSlack\\CoreSlackServiceProvider"
+                "Interadigital\\CoreNotifications\\CoreNotificationsServiceProvider"
             ]
         }
     },

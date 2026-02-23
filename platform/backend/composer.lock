@@ -1156,11 +1156,11 @@
             }
         },
         {
-            "name": "interadigital/core-slack",
+            "name": "interadigital/core-notifications",
             "version": "1.0.0",
             "dist": {
                 "type": "path",
-                "url": "../../packages/php/core-slack",
+                "url": "../../packages/php/core-notifications",
                 "reference": "0000000000000000000000000000000000000000"
             },
             "require": {
@@ -1171,19 +1171,19 @@
             "extra": {
                 "laravel": {
                     "providers": [
-                        "Interadigital\\CoreSlack\\CoreSlackServiceProvider"
+                        "Interadigital\\CoreNotifications\\CoreNotificationsServiceProvider"
                     ]
                 }
             },
             "autoload": {
                 "psr-4": {
-                    "Interadigital\\CoreSlack\\": "src/"
+                    "Interadigital\\CoreNotifications\\": "src/"
                 }
             },
             "license": [
                 "proprietary"
             ],
-            "description": "Shared Slack transport primitives for Interadigital services.",
+            "description": "Shared notification transport primitives for Interadigital services.",
             "transport-options": {
                 "symlink": true,
                 "relative": true

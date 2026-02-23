@@ -3,7 +3,7 @@
 namespace App\Providers;
 
 use Illuminate\Support\ServiceProvider;
-use Interadigital\CoreSlack\Transport\SlackTransport;
+use Interadigital\CoreNotifications\Transport\SlackTransport;
 
 class AppServiceProvider extends ServiceProvider
 {

@@ -5,8 +5,8 @@ declare(strict_types=1);
 namespace App\Services\Slack;
 
 use App\Notifications\Slack\AbstractSlackNotification;
-use Interadigital\CoreSlack\Transport\SlackTransport;
-use Interadigital\CoreSlack\Transport\SlackTransportMessage;
+use Interadigital\CoreNotifications\Transport\SlackTransport;
+use Interadigital\CoreNotifications\Transport\SlackTransportMessage;
 
 class SlackNotificationSender
 {
