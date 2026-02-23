@@ -47,6 +47,12 @@ return [
         'api_key' => env('PTERO_API_KEY'),
     ],
 
+    'locations_cache' => [
+        'disk' => env('LOCATIONS_CACHE_DISK', 'locations_cache'),
+        'path' => env('LOCATIONS_CACHE_PATH', 'locations.json'),
+        'ttl_seconds' => (int) env('LOCATIONS_CACHE_TTL_SECONDS', 60),
+    ],
+
     'event_bus' => [
         'topics' => [
             'server.ordered.v1' => env('EVENT_BUS_SERVER_ORDERS_TOPIC_ARN'),

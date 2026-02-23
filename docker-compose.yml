@@ -32,6 +32,33 @@ services:
     networks:
       - platform
 
+  minio:
+    image: minio/minio:latest
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin
+    command: server /data --console-address ":9001"
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - minio_data:/data
+    networks:
+      - platform
+
+  minio-create-bucket:
+    image: minio/mc:latest
+    depends_on:
+      minio:
+        condition: service_started
+    entrypoint: >
+      /bin/sh -c "
+      until /usr/bin/mc alias set local http://minio:9000 minioadmin minioadmin; do sleep 1; done;
+      /usr/bin/mc mb --ignore-existing local/voxel-cache;
+      "
+    networks:
+      - platform
+
   backend:
     build:
       context: .
@@ -44,6 +71,16 @@ services:
       AWS_ENDPOINT: http://localstack:4566
       AWS_USE_PATH_STYLE_ENDPOINT: "true"
       EVENT_BUS_SERVER_ORDERS_TOPIC_ARN: arn:aws:sns:us-east-1:000000000000:server-orders
+      LOCATIONS_CACHE_DISK: locations_cache
+      LOCATIONS_CACHE_PATH: locations.json
+      LOCATIONS_CACHE_TTL_SECONDS: 60
+      LOCATIONS_CACHE_DRIVER: s3
+      LOCATIONS_CACHE_AWS_ACCESS_KEY_ID: minioadmin
+      LOCATIONS_CACHE_AWS_SECRET_ACCESS_KEY: minioadmin
+      LOCATIONS_CACHE_AWS_DEFAULT_REGION: us-east-1
+      LOCATIONS_CACHE_AWS_BUCKET: voxel-cache
+      LOCATIONS_CACHE_AWS_ENDPOINT: http://minio:9000
+      LOCATIONS_CACHE_AWS_USE_PATH_STYLE_ENDPOINT: "true"
     volumes:
       - ./platform/backend:/var/www/html
       - ./packages:/var/packages:ro
@@ -56,6 +93,8 @@ services:
         condition: service_healthy
       localstack:
         condition: service_started
+      minio-create-bucket:
+        condition: service_completed_successfully
     labels:
       - traefik.enable=true
       - traefik.http.routers.api.rule=Host(`api.localhost`)
@@ -76,6 +115,16 @@ services:
       AWS_ENDPOINT: http://localstack:4566
       AWS_USE_PATH_STYLE_ENDPOINT: "true"
       EVENT_BUS_SERVER_ORDERS_TOPIC_ARN: arn:aws:sns:us-east-1:000000000000:server-orders
+      LOCATIONS_CACHE_DISK: locations_cache
+      LOCATIONS_CACHE_PATH: locations.json
+      LOCATIONS_CACHE_TTL_SECONDS: 60
+      LOCATIONS_CACHE_DRIVER: s3
+      LOCATIONS_CACHE_AWS_ACCESS_KEY_ID: minioadmin
+      LOCATIONS_CACHE_AWS_SECRET_ACCESS_KEY: minioadmin
+      LOCATIONS_CACHE_AWS_DEFAULT_REGION: us-east-1
+      LOCATIONS_CACHE_AWS_BUCKET: voxel-cache
+      LOCATIONS_CACHE_AWS_ENDPOINT: http://minio:9000
+      LOCATIONS_CACHE_AWS_USE_PATH_STYLE_ENDPOINT: "true"
     volumes:
       - ./platform/backend:/var/www/html
       - ./packages:/var/packages:ro
@@ -84,6 +133,7 @@ services:
     depends_on:
       - backend
       - localstack
+      - minio-create-bucket
     networks:
       - platform
 
@@ -100,6 +150,15 @@ services:
       AWS_USE_PATH_STYLE_ENDPOINT: "true"
       EVENT_BUS_SERVER_ORDERS_TOPIC_ARN: arn:aws:sns:us-east-1:000000000000:server-orders
       EVENT_BUS_SERVER_ORDERS_QUEUE_URL: http://localstack:4566/000000000000/server-orders-orchestrator
+      LOCATIONS_CACHE_DISK: locations_cache
+      LOCATIONS_CACHE_PATH: locations.json
+      LOCATIONS_CACHE_DRIVER: s3
+      LOCATIONS_CACHE_AWS_ACCESS_KEY_ID: minioadmin
+      LOCATIONS_CACHE_AWS_SECRET_ACCESS_KEY: minioadmin
+      LOCATIONS_CACHE_AWS_DEFAULT_REGION: us-east-1
+      LOCATIONS_CACHE_AWS_BUCKET: voxel-cache
+      LOCATIONS_CACHE_AWS_ENDPOINT: http://minio:9000
+      LOCATIONS_CACHE_AWS_USE_PATH_STYLE_ENDPOINT: "true"
     volumes:
       - ./platform/orchestrator:/var/www/html
       - ./packages:/var/packages:ro
@@ -112,6 +171,8 @@ services:
         condition: service_healthy
       localstack:
         condition: service_started
+      minio-create-bucket:
+        condition: service_completed_successfully
     labels:
       - traefik.enable=true
       - traefik.http.routers.orchestrator.rule=Host(`orchestrator.localhost`)
@@ -133,6 +194,15 @@ services:
       AWS_USE_PATH_STYLE_ENDPOINT: "true"
       EVENT_BUS_SERVER_ORDERS_TOPIC_ARN: arn:aws:sns:us-east-1:000000000000:server-orders
       EVENT_BUS_SERVER_ORDERS_QUEUE_URL: http://localstack:4566/000000000000/server-orders-orchestrator
+      LOCATIONS_CACHE_DISK: locations_cache
+      LOCATIONS_CACHE_PATH: locations.json
+      LOCATIONS_CACHE_DRIVER: s3
+      LOCATIONS_CACHE_AWS_ACCESS_KEY_ID: minioadmin
+      LOCATIONS_CACHE_AWS_SECRET_ACCESS_KEY: minioadmin
+      LOCATIONS_CACHE_AWS_DEFAULT_REGION: us-east-1
+      LOCATIONS_CACHE_AWS_BUCKET: voxel-cache
+      LOCATIONS_CACHE_AWS_ENDPOINT: http://minio:9000
+      LOCATIONS_CACHE_AWS_USE_PATH_STYLE_ENDPOINT: "true"
     volumes:
       - ./platform/orchestrator:/var/www/html
       - ./packages:/var/packages:ro
@@ -141,6 +211,7 @@ services:
     depends_on:
       - orchestrator
       - localstack
+      - minio-create-bucket
     networks:
       - platform
 
@@ -333,6 +404,7 @@ networks:
 volumes:
   mysql_data:
   localstack_data:
+  minio_data:
   backend_vendor:
   orchestrator_vendor:
   frontend_node_modules:

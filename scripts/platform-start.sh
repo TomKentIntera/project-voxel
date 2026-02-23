@@ -92,6 +92,8 @@ echo "API:       http://api.localhost"
 echo "Orchestrator: http://orchestrator.localhost"
 echo "Storybook: http://storybook.localhost"
 echo "Panel:     http://panel.localhost"
+echo "MinIO API: http://127.0.0.1:9000"
+echo "MinIO UI:  http://127.0.0.1:9001"
 if [ "$with_wings" = "true" ]; then
   echo "Wings API: http://127.0.0.1:8080"
   echo "Wings SFTP: sftp://127.0.0.1:2022"

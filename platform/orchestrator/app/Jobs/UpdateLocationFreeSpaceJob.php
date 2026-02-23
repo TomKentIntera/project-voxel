@@ -31,8 +31,17 @@ class UpdateLocationFreeSpaceJob implements ShouldQueue
             throw new RuntimeException('Unable to encode Pterodactyl locations payload.');
         }
 
-        Storage::disk('local')->put('locations.json', $encodedPayload);
-        $this->copyToBackendStorage($encodedPayload);
+        // Keep the existing local file for orchestrator consumers.
+        $localPath = storage_path('app/locations.json');
+        File::ensureDirectoryExists(dirname($localPath));
+        $bytesWritten = File::put($localPath, $encodedPayload);
+
+        if ($bytesWritten === false) {
+            throw new RuntimeException('Unable to write local locations cache file.');
+        }
+
+        // Publish to shared object storage for cross-service consumption.
+        Storage::disk($this->locationsCacheDisk())->put($this->locationsCachePath(), $encodedPayload);
     }
 
     /**
@@ -149,32 +158,15 @@ class UpdateLocationFreeSpaceJob implements ShouldQueue
         return $result;
     }
 
-    private function copyToBackendStorage(string $encodedPayload): void
+    private function locationsCacheDisk(): string
     {
-        $backendLocationsPath = $this->backendLocationsPath();
-
-        if ($backendLocationsPath === null) {
-            return;
-        }
-
-        File::ensureDirectoryExists(dirname($backendLocationsPath));
-        $bytesWritten = File::put($backendLocationsPath, $encodedPayload);
-
-        if ($bytesWritten === false) {
-            throw new RuntimeException(sprintf('Unable to copy locations cache to backend storage path: %s', $backendLocationsPath));
-        }
+        return (string) config('services.locations_cache.disk', 'locations_cache');
     }
 
-    private function backendLocationsPath(): ?string
+    private function locationsCachePath(): string
     {
-        $configuredPath = trim((string) config('services.pterodactyl.backend_locations_cache_path', ''));
+        $configuredPath = trim((string) config('services.locations_cache.path', 'locations.json'));
 
-        if ($configuredPath !== '') {
-            return $configuredPath;
-        }
-
-        $defaultPath = base_path('../backend/storage/app/locations.json');
-
-        return File::isDirectory(dirname($defaultPath)) ? $defaultPath : null;
+        return $configuredPath !== '' ? $configuredPath : 'locations.json';
     }
 }

@@ -7,40 +7,39 @@ namespace Tests\Feature;
 use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Storage;
 use Tests\TestCase;
 
 class UpdateLocationFreeSpaceCacheTest extends TestCase
 {
     private string $localCachePath;
 
-    private string $backendCachePath;
-
-    private string $backendCacheDirectory;
-
     protected function setUp(): void
     {
         parent::setUp();
 
         $this->localCachePath = storage_path('app/locations.json');
-        $this->backendCacheDirectory = storage_path('framework/testing/backend-cache');
-        $this->backendCachePath = $this->backendCacheDirectory.'/locations.json';
+
+        Storage::fake('locations_cache');
 
         config()->set('services.pterodactyl', [
             'base_url' => 'https://panel.example.com',
             'application_api_key' => 'app-api-token',
             'client_api_key' => 'client-api-token',
             'timeout' => 30,
-            'backend_locations_cache_path' => $this->backendCachePath,
+        ]);
+
+        config()->set('services.locations_cache', [
+            'disk' => 'locations_cache',
+            'path' => 'locations.json',
         ]);
 
         File::delete($this->localCachePath);
-        File::deleteDirectory($this->backendCacheDirectory);
     }
 
     protected function tearDown(): void
     {
         File::delete($this->localCachePath);
-        File::deleteDirectory($this->backendCacheDirectory);
 
         parent::tearDown();
     }
@@ -97,14 +96,14 @@ class UpdateLocationFreeSpaceCacheTest extends TestCase
             ->assertSuccessful();
 
         $this->assertFileExists($this->localCachePath);
-        $this->assertFileExists($this->backendCachePath);
+        Storage::disk('locations_cache')->assertExists('locations.json');
 
         $localPayload = json_decode((string) File::get($this->localCachePath), true);
-        $backendPayload = json_decode((string) File::get($this->backendCachePath), true);
+        $sharedPayload = json_decode((string) Storage::disk('locations_cache')->get('locations.json'), true);
 
         $this->assertIsArray($localPayload);
-        $this->assertIsArray($backendPayload);
-        $this->assertSame($localPayload, $backendPayload);
+        $this->assertIsArray($sharedPayload);
+        $this->assertSame($localPayload, $sharedPayload);
 
         $this->assertCount(1, $localPayload['locations']);
         $this->assertCount(2, $localPayload['nodes']);

@@ -40,7 +40,11 @@ return [
         'application_api_key' => env('PTERODACTYL_APPLICATION_API_KEY'),
         'client_api_key' => env('PTERODACTYL_CLIENT_API_KEY'),
         'timeout' => (int) env('PTERODACTYL_TIMEOUT', 15),
-        'backend_locations_cache_path' => env('BACKEND_LOCATIONS_CACHE_PATH'),
+    ],
+
+    'locations_cache' => [
+        'disk' => env('LOCATIONS_CACHE_DISK', 'locations_cache'),
+        'path' => env('LOCATIONS_CACHE_PATH', 'locations.json'),
     ],
 
     'event_bus' => [
