@@ -1,0 +1,25 @@
+{
+    "name": "interadigital/core-notifications",
+    "description": "Shared notification transport primitives for Interadigital services.",
+    "license": "proprietary",
+    "type": "library",
+    "version": "1.0.0",
+    "require": {
+        "php": "^8.2",
+        "laravel/framework": "^12.0"
+    },
+    "autoload": {
+        "psr-4": {
+            "Interadigital\\CoreNotifications\\": "src/"
+        }
+    },
+    "extra": {
+        "laravel": {
+            "providers": [
+                "Interadigital\\CoreNotifications\\CoreNotificationsServiceProvider"
+            ]
+        }
+    },
+    "minimum-stability": "stable",
+    "prefer-stable": true
+}
