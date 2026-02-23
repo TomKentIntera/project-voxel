@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace App\Services\Stripe\Services;
 
+use App\Jobs\SendSlackNotification;
+use App\Notifications\Slack\ServerOrderedSlackNotification;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
@@ -103,6 +105,10 @@ class StripeWebhookService
                 'stripe_subscription_id' => $subscriptionId,
             ],
         ]);
+
+        SendSlackNotification::dispatch(
+            new ServerOrderedSlackNotification((int) $server->id),
+        );
     }
 
     /**

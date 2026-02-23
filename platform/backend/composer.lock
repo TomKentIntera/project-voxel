@@ -1156,6 +1156,40 @@
             }
         },
         {
+            "name": "interadigital/core-notifications",
+            "version": "1.0.0",
+            "dist": {
+                "type": "path",
+                "url": "../../packages/php/core-notifications",
+                "reference": "0000000000000000000000000000000000000000"
+            },
+            "require": {
+                "laravel/framework": "^12.0",
+                "php": "^8.2"
+            },
+            "type": "library",
+            "extra": {
+                "laravel": {
+                    "providers": [
+                        "Interadigital\\CoreNotifications\\CoreNotificationsServiceProvider"
+                    ]
+                }
+            },
+            "autoload": {
+                "psr-4": {
+                    "Interadigital\\CoreNotifications\\": "src/"
+                }
+            },
+            "license": [
+                "proprietary"
+            ],
+            "description": "Shared notification transport primitives for Interadigital services.",
+            "transport-options": {
+                "symlink": true,
+                "relative": true
+            }
+        },
+        {
             "name": "laravel/framework",
             "version": "v12.51.0",
             "source": {
