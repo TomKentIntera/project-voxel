@@ -59,6 +59,18 @@ else
   $compose_cmd up -d
 fi
 
+ensure_pterodactyl_database() {
+  echo "Ensuring shared MySQL has the pterodactyl schema..."
+  docker compose exec -T mysql mysql -uroot -psecret <<'SQL'
+CREATE DATABASE IF NOT EXISTS `pterodactyl` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+CREATE USER IF NOT EXISTS 'pterodactyl'@'%' IDENTIFIED BY 'secret';
+GRANT ALL PRIVILEGES ON `pterodactyl`.* TO 'pterodactyl'@'%';
+FLUSH PRIVILEGES;
+SQL
+}
+
+ensure_pterodactyl_database
+
 if [ -x "$SCRIPT_DIR/event-bus-terraform.sh" ]; then
   "$SCRIPT_DIR/event-bus-terraform.sh" local apply --auto-approve
 fi

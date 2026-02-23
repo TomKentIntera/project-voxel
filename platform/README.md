@@ -61,6 +61,9 @@ Routes exposed by the root Traefik router:
 - `http://panel.localhost` -> Pterodactyl Panel
 - `http://storybook.localhost` -> Component storybook (dev only)
 
+Database note: the Pterodactyl panel uses the shared `mysql` container with its own
+`pterodactyl` schema and credentials (it does not run a separate MySQL container).
+
 Additional testing-only service (not started unless `--with-wings` is passed):
 
 - `http://127.0.0.1:8080` -> Pterodactyl Wings API
