@@ -6,7 +6,6 @@ namespace App\Services\Slack;
 
 use App\Notifications\Slack\AbstractSlackNotification;
 use Interadigital\CoreNotifications\Transport\SlackTransport;
-use Interadigital\CoreNotifications\Transport\SlackTransportMessage;
 
 class SlackNotificationSender
 {
@@ -17,9 +16,6 @@ class SlackNotificationSender
 
     public function send(AbstractSlackNotification $notification): void
     {
-        $this->slackTransport->send(new SlackTransportMessage(
-            channel: $notification->channel(),
-            content: $notification->content(),
-        ));
+        $this->slackTransport->send($notification);
     }
 }

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Interadigital\CoreNotifications\Transport;
 
+use Interadigital\CoreNotifications\Contracts\NotificationMessageContract;
 use Illuminate\Support\Facades\Http;
 use InvalidArgumentException;
 use RuntimeException;
@@ -17,19 +18,19 @@ class SlackTransport
     ) {
     }
 
-    public function send(SlackTransportMessage $message): void
+    public function send(NotificationMessageContract $message): void
     {
         $token = trim($this->botUserOAuthToken);
         if ($token === '') {
             throw new InvalidArgumentException('SLACK_BOT_USER_OAUTH_TOKEN is not configured.');
         }
 
-        $channelId = trim($message->channel);
+        $channelId = trim($message->channel());
         if ($channelId === '') {
             throw new InvalidArgumentException('Slack destination channel ID is required.');
         }
 
-        $content = trim($message->content);
+        $content = trim($message->content());
         if ($content === '') {
             throw new InvalidArgumentException('Slack notification content is required.');
         }
