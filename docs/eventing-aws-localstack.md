@@ -13,6 +13,9 @@ This project uses AWS-style eventing for cross-service communication:
 - SQS queue: `server-orders-orchestrator`
 - Subscription: `server-orders` -> `server-orders-orchestrator`
 - SQS DLQ: `server-orders-orchestrator-dlq`
+- SQS queue: `server-lifecycle-backend`
+- Subscription: `server-orders` -> `server-lifecycle-backend`
+- SQS DLQ: `server-lifecycle-backend-dlq`
 
 Resources are provisioned via Terraform from:
 
@@ -42,6 +45,7 @@ scripts/event-bus-terraform.sh local apply --auto-approve
 ```
 
 `orchestrator-worker` runs `php artisan events:consume-server-ordered`.
+`backend-event-consumer` runs `php artisan events:consume-server-lifecycle`.
 
 ## AWS setup
 
@@ -68,6 +72,7 @@ Both Laravel apps now support these variables:
 - `AWS_USE_PATH_STYLE_ENDPOINT`
 - `EVENT_BUS_SERVER_ORDERS_TOPIC_ARN`
 - `EVENT_BUS_SERVER_ORDERS_QUEUE_URL`
+- `EVENT_BUS_SERVER_LIFECYCLE_QUEUE_URL`
 
 And `services.event_bus.topics` maps event type -> topic ARN (for example `server.ordered.v1`).
 
@@ -98,4 +103,12 @@ Receive from queue:
 ```bash
 docker compose exec localstack awslocal sqs receive-message \
   --queue-url http://localhost:4566/000000000000/server-orders-orchestrator
+```
+
+Example lifecycle event payload (consumed by backend lifecycle invalidator):
+
+```bash
+docker compose exec localstack awslocal sns publish \
+  --topic-arn arn:aws:sns:us-east-1:000000000000:server-orders \
+  --message '{"event_id":"manual-provisioned","event_type":"server.provisioned","occurred_at":"2026-02-20T00:00:00Z","server_id":1}'
 ```

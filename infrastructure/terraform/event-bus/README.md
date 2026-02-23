@@ -4,7 +4,8 @@ This stack provisions the event transport resources used by the platform:
 
 - SNS topic for `server.ordered.v1`
 - SQS consumer queue for orchestrator
-- SQS dead-letter queue
+- SQS consumer queue for backend lifecycle invalidation
+- SQS dead-letter queues
 - SNS -> SQS subscription with `raw_message_delivery = true`
 - Queue policy allowing only the SNS topic to publish
 
@@ -39,3 +40,4 @@ scripts/event-bus-terraform.sh local output-env
 
 - `EVENT_BUS_SERVER_ORDERS_TOPIC_ARN`
 - `EVENT_BUS_SERVER_ORDERS_QUEUE_URL`
+- `EVENT_BUS_SERVER_LIFECYCLE_QUEUE_URL`

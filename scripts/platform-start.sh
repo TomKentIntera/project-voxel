@@ -60,6 +60,7 @@ fi
 is_event_bus_provisioned() {
   topic_name="${EVENT_BUS_TOPIC_NAME:-server-orders}"
   queue_name="${EVENT_BUS_QUEUE_NAME:-server-orders-orchestrator}"
+  lifecycle_queue_name="${EVENT_BUS_LIFECYCLE_QUEUE_NAME:-server-lifecycle-backend}"
   aws_region="${AWS_DEFAULT_REGION:-us-east-1}"
   topic_arn="arn:aws:sns:${aws_region}:000000000000:${topic_name}"
 
@@ -68,6 +69,10 @@ is_event_bus_provisioned() {
   fi
 
   if ! docker compose exec -T localstack awslocal sqs get-queue-url --queue-name "$queue_name" >/dev/null 2>&1; then
+    return 1
+  fi
+
+  if ! docker compose exec -T localstack awslocal sqs get-queue-url --queue-name "$lifecycle_queue_name" >/dev/null 2>&1; then
     return 1
   fi
 

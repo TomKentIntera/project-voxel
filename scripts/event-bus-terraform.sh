@@ -19,6 +19,8 @@ Environment overrides:
   EVENT_BUS_TOPIC_NAME                   (default: server-orders)
   EVENT_BUS_QUEUE_NAME                   (default: server-orders-orchestrator)
   EVENT_BUS_DLQ_NAME                     (default: server-orders-orchestrator-dlq)
+  EVENT_BUS_LIFECYCLE_QUEUE_NAME         (default: server-lifecycle-backend)
+  EVENT_BUS_LIFECYCLE_DLQ_NAME           (default: server-lifecycle-backend-dlq)
   EVENT_BUS_MAX_RECEIVE_COUNT            (default: 5)
   LOCALSTACK_ENDPOINT                    (default: http://localhost:4566)
 EOF
@@ -67,6 +69,8 @@ export TF_VAR_aws_region="${AWS_DEFAULT_REGION:-us-east-1}"
 export TF_VAR_topic_name="${EVENT_BUS_TOPIC_NAME:-server-orders}"
 export TF_VAR_queue_name="${EVENT_BUS_QUEUE_NAME:-server-orders-orchestrator}"
 export TF_VAR_dead_letter_queue_name="${EVENT_BUS_DLQ_NAME:-server-orders-orchestrator-dlq}"
+export TF_VAR_lifecycle_queue_name="${EVENT_BUS_LIFECYCLE_QUEUE_NAME:-server-lifecycle-backend}"
+export TF_VAR_lifecycle_dead_letter_queue_name="${EVENT_BUS_LIFECYCLE_DLQ_NAME:-server-lifecycle-backend-dlq}"
 export TF_VAR_max_receive_count="${EVENT_BUS_MAX_RECEIVE_COUNT:-5}"
 
 if [ "$target" = "local" ]; then
@@ -116,9 +120,11 @@ case "$action" in
   output-env)
     topic_arn="$(run_tf output -raw topic_arn)"
     queue_url="$(run_tf output -raw queue_url)"
+    lifecycle_queue_url="$(run_tf output -raw lifecycle_queue_url)"
     cat <<EOF
 export EVENT_BUS_SERVER_ORDERS_TOPIC_ARN="$topic_arn"
 export EVENT_BUS_SERVER_ORDERS_QUEUE_URL="$queue_url"
+export EVENT_BUS_SERVER_LIFECYCLE_QUEUE_URL="$lifecycle_queue_url"
 EOF
     ;;
 esac
