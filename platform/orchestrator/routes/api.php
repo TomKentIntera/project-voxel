@@ -8,6 +8,7 @@ use App\Http\Controllers\NodeController;
 use App\Http\Controllers\NodeTelemetryController;
 use App\Http\Controllers\PlanController;
 use App\Http\Controllers\RegionalProxyController;
+use App\Http\Controllers\ServerDestinationController;
 use App\Http\Controllers\ServerController;
 use App\Http\Controllers\UserController;
 use Illuminate\Support\Facades\Route;
@@ -43,6 +44,7 @@ Route::middleware(['auth.jwt', 'admin'])->group(function (): void {
     Route::get('/regional-proxies', [RegionalProxyController::class, 'index']);
     Route::get('/regional-proxies/{id}', [RegionalProxyController::class, 'show']);
     Route::post('/regional-proxies', [RegionalProxyController::class, 'store']);
+    Route::post('/destinations/resolve', [ServerDestinationController::class, 'resolve']);
     Route::get('/metrics', [MetricsController::class, 'index']);
     Route::get('/users', [UserController::class, 'index']);
     Route::get('/users/{id}', [UserController::class, 'show']);
