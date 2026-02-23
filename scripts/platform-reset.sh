@@ -63,7 +63,8 @@ ensure_pterodactyl_database() {
   echo "Ensuring shared MySQL has the pterodactyl schema..."
   docker compose exec -T mysql mysql -uroot -psecret <<'SQL'
 CREATE DATABASE IF NOT EXISTS `pterodactyl` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
-CREATE USER IF NOT EXISTS 'pterodactyl'@'%' IDENTIFIED BY 'secret';
+CREATE USER IF NOT EXISTS 'pterodactyl'@'%' IDENTIFIED WITH mysql_native_password BY 'secret';
+ALTER USER 'pterodactyl'@'%' IDENTIFIED WITH mysql_native_password BY 'secret';
 GRANT ALL PRIVILEGES ON `pterodactyl`.* TO 'pterodactyl'@'%';
 FLUSH PRIVILEGES;
 SQL

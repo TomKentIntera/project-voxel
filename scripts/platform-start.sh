@@ -51,22 +51,71 @@ if [ "$skip_provision" = "true" ] && [ "$force_provision" = "true" ]; then
   exit 1
 fi
 
-if [ "$with_wings" = "true" ]; then
-  docker compose --profile testing up -d
-else
-  docker compose up -d
-fi
+start_infra() {
+  docker compose up -d mysql localstack minio minio-create-bucket
+}
+
+start_stack() {
+  if [ "$with_wings" = "true" ]; then
+    docker compose --profile testing up -d
+  else
+    docker compose up -d
+  fi
+}
+
+start_infra
+
+wait_for_mysql_ready() {
+  attempts=0
+  until docker compose exec -T mysql mysqladmin ping -h 127.0.0.1 -uroot -psecret >/dev/null 2>&1; do
+    attempts=$((attempts + 1))
+    if [ "$attempts" -ge 30 ]; then
+      echo "MySQL did not become ready in time." >&2
+      exit 1
+    fi
+    sleep 2
+  done
+}
+
+wait_for_localstack_ready() {
+  attempts=0
+  until docker compose exec -T localstack sh -lc "curl -sf http://localhost:4566/_localstack/health >/dev/null" >/dev/null 2>&1; do
+    attempts=$((attempts + 1))
+    if [ "$attempts" -ge 30 ]; then
+      echo "LocalStack did not become ready in time." >&2
+      exit 1
+    fi
+    sleep 2
+  done
+}
 
 ensure_pterodactyl_database() {
   echo "Ensuring shared MySQL has the pterodactyl schema..."
   docker compose exec -T mysql mysql -uroot -psecret <<'SQL'
 CREATE DATABASE IF NOT EXISTS `pterodactyl` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
-CREATE USER IF NOT EXISTS 'pterodactyl'@'%' IDENTIFIED BY 'secret';
+CREATE USER IF NOT EXISTS 'pterodactyl'@'%' IDENTIFIED WITH mysql_native_password BY 'secret';
+ALTER USER 'pterodactyl'@'%' IDENTIFIED WITH mysql_native_password BY 'secret';
 GRANT ALL PRIVILEGES ON `pterodactyl`.* TO 'pterodactyl'@'%';
 FLUSH PRIVILEGES;
 SQL
 }
 
+wait_for_localstack_event_bus_restore() {
+  attempts=0
+  while [ "$attempts" -lt 20 ]; do
+    if is_event_bus_provisioned; then
+      return 0
+    fi
+
+    attempts=$((attempts + 1))
+    sleep 2
+  done
+
+  return 1
+}
+
+wait_for_mysql_ready
+wait_for_localstack_ready
 ensure_pterodactyl_database
 
 is_event_bus_provisioned() {
@@ -97,11 +146,13 @@ elif [ "$skip_provision" = "true" ]; then
   echo "Skipping LocalStack event bus provisioning (--skip-provision)."
 elif [ "$force_provision" = "true" ]; then
   "$SCRIPT_DIR/event-bus-terraform.sh" local apply --auto-approve
-elif is_event_bus_provisioned; then
+elif wait_for_localstack_event_bus_restore; then
   echo "LocalStack event bus already provisioned. Skipping Terraform apply."
 else
   "$SCRIPT_DIR/event-bus-terraform.sh" local apply --auto-approve
 fi
+
+start_stack
 
 echo "Platform stack started."
 echo "Frontend:  http://store.localhost"

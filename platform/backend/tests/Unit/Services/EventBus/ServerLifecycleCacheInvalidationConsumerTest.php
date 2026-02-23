@@ -59,6 +59,22 @@ class ServerLifecycleCacheInvalidationConsumerTest extends TestCase
         $this->assertSame(0, $processed);
     }
 
+    public function test_it_skips_missing_queue_errors_without_failing_the_consumer_loop(): void
+    {
+        $reader = Mockery::mock(LocationsCacheReader::class);
+        $reader->shouldNotReceive('forgetCachedPayload');
+        $this->app->instance(LocationsCacheReader::class, $reader);
+
+        Http::fakeSequence()
+            ->push($this->nonExistentQueueErrorXml(), 400);
+
+        $consumer = app(ServerLifecycleCacheInvalidationConsumer::class);
+
+        $processed = $consumer->consumeBatch(maxMessages: 1, waitTimeSeconds: 0);
+
+        $this->assertSame(0, $processed);
+    }
+
     private function receiveMessageResponseXml(string $eventType): string
     {
         $payload = json_encode(['event_type' => $eventType], JSON_THROW_ON_ERROR);
@@ -84,6 +100,14 @@ XML;
 <DeleteMessageResponse>
   <DeleteMessageResult />
 </DeleteMessageResponse>
+XML;
+    }
+
+    private function nonExistentQueueErrorXml(): string
+    {
+        return <<<XML
+<?xml version='1.0' encoding='utf-8'?>
+<ErrorResponse xmlns="http://queue.amazonaws.com/doc/2012-11-05/"><Error><Code>AWS.SimpleQueueService.NonExistentQueue</Code><Message>The specified queue does not exist for this wsdl version.</Message><Type>Sender</Type></Error><RequestId>test-request-id</RequestId></ErrorResponse>
 XML;
     }
 }
