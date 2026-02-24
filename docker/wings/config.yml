@@ -1,34 +1,22 @@
-# Testing-only Wings configuration for the local Docker stack.
-# Replace uuid/token_id/token with values copied from the Panel node config before real node tests.
 debug: false
-uuid: "00000000-0000-4000-8000-000000000001"
-token_id: "replace-me"
-token: "replace-me"
-
+uuid: f2b6f48d-1449-4f7a-96d5-69ddbe6eac8c
+token_id: Yt7fFgg8lbbYQpTI
+token: E6oxWHv0MJUpRpo4guFtiW5CJnBR6anpUWpQlDMFvgIij5OfypiBwfLNcncKopRY
 api:
-  host: "0.0.0.0"
+  host: 0.0.0.0
   port: 8080
   ssl:
     enabled: false
-
+    cert: /etc/letsencrypt/live/127.0.0.1/fullchain.pem
+    key: /etc/letsencrypt/live/127.0.0.1/privkey.pem
+  upload_limit: 100
 system:
-  root_directory: "/tmp/pterodactyl"
-  log_directory: "/tmp/pterodactyl-logs"
-  data: "/tmp/pterodactyl/volumes"
-  archive_directory: "/tmp/pterodactyl/archives"
-  backup_directory: "/tmp/pterodactyl/backups"
-  tmp_directory: "/tmp/pterodactyl-tmp"
-  timezone: "UTC"
-  passwd:
-    enabled: false
-  machine_id:
-    enabled: false
-
-remote: "http://pterodactyl-panel"
-remote_query:
-  timeout: 30
-  boot_servers_per_page: 50
-
+  data: /var/lib/pterodactyl/volumes
+  sftp:
+    bind_port: 2022
 allowed_mounts: []
-allowed_origins: []
-ignore_panel_config_updates: true
+remote: "http://pterodactyl-panel"
+docker:
+  network:
+    name: host
+    network_mode: host
