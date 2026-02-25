@@ -83,10 +83,25 @@ export interface NodeTelemetryServer {
   server: NodeLinkedServer | null
 }
 
+export interface NodeAllocation {
+  id: number | string | null
+  ip: string | null
+  alias: string | null
+  port: number | null
+  assigned: boolean
+  ptero_server_id: number | null
+  server: NodeLinkedServer | null
+}
+
 export interface NodeProfile extends NodeListItem {
   performance_last_24h: NodePerformanceWindow
   servers: NodeTelemetryServer[]
   servers_count: number
+  allocations: NodeAllocation[]
+  allocations_count: number
+  assigned_allocations_count: number
+  unassigned_allocations_count: number
+  allocations_error: string | null
 }
 
 interface NodeProfileResponse {

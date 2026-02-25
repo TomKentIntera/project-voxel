@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Http\Controllers;
 
 use App\Jobs\SyncNodeToPterodactylJob;
+use App\Services\Pterodactyl\Services\PterodactylApiClient;
 use App\Services\Pterodactyl\Support\AllocationPortNormalizer;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -18,6 +19,7 @@ use Interadigital\CoreModels\Models\TelemetryNode;
 use Interadigital\CoreModels\Models\TelemetryServer;
 use Interadigital\CoreModels\Models\User;
 use Symfony\Component\HttpFoundation\Response;
+use Throwable;
 
 class NodeController extends Controller
 {
@@ -52,7 +54,7 @@ class NodeController extends Controller
         ]);
     }
 
-    public function show(string $id): JsonResponse
+    public function show(PterodactylApiClient $pterodactylApiClient, string $id): JsonResponse
     {
         $node = Node::find($id);
 
@@ -67,6 +69,7 @@ class NodeController extends Controller
             ->where('node_id', $id)
             ->orderByDesc('created_at')
             ->first();
+        $allocationDetails = $this->resolveNodeAllocations($node, $pterodactylApiClient);
 
         return response()->json([
             'data' => [
@@ -74,6 +77,11 @@ class NodeController extends Controller
                 'performance_last_24h' => $this->buildPerformanceWindow($id, $latestTelemetry),
                 'servers' => $servers,
                 'servers_count' => count($servers),
+                'allocations' => $allocationDetails['items'],
+                'allocations_count' => $allocationDetails['counts']['total'],
+                'assigned_allocations_count' => $allocationDetails['counts']['assigned'],
+                'unassigned_allocations_count' => $allocationDetails['counts']['unassigned'],
+                'allocations_error' => $allocationDetails['error'],
             ],
         ]);
     }
@@ -221,6 +229,179 @@ class NodeController extends Controller
         $applicationApiKey = trim((string) config('services.pterodactyl.application_api_key', ''));
 
         return $baseUrl !== '' && $applicationApiKey !== '';
+    }
+
+    /**
+     * @return array{
+     *   items: list<array{
+     *     id: int|string|null,
+     *     ip: string|null,
+     *     alias: string|null,
+     *     port: int|null,
+     *     assigned: bool,
+     *     ptero_server_id: int|null,
+     *     server: array{
+     *       id: int,
+     *       uuid: string,
+     *       name: string,
+     *       status: string|null,
+     *       plan: string|null,
+     *       owner: array<string, mixed>|null
+     *     }|null
+     *   }>,
+     *   counts: array{total: int, assigned: int, unassigned: int},
+     *   error: string|null
+     * }
+     */
+    private function resolveNodeAllocations(Node $node, PterodactylApiClient $pterodactylApiClient): array
+    {
+        $pteroNodeId = $this->normalizePositiveInteger($node->ptero_node_id);
+
+        if ($pteroNodeId === null || ! $this->isPterodactylNodeSyncConfigured()) {
+            return [
+                'items' => [],
+                'counts' => [
+                    'total' => 0,
+                    'assigned' => 0,
+                    'unassigned' => 0,
+                ],
+                'error' => null,
+            ];
+        }
+
+        try {
+            $allocations = $pterodactylApiClient->listNodeAllocations($pteroNodeId);
+        } catch (Throwable $exception) {
+            return [
+                'items' => [],
+                'counts' => [
+                    'total' => 0,
+                    'assigned' => 0,
+                    'unassigned' => 0,
+                ],
+                'error' => trim($exception->getMessage()) !== '' ? trim($exception->getMessage()) : 'Failed to load allocations.',
+            ];
+        }
+
+        $assignedPanelServerIds = collect($allocations)
+            ->map(fn (array $allocation): ?string => $this->normalizePanelServerId($allocation['server_id'] ?? null))
+            ->filter(fn (?string $panelServerId): bool => is_string($panelServerId) && $panelServerId !== '')
+            ->values();
+
+        $serversByPteroId = $this->resolveServersByPteroId($assignedPanelServerIds);
+
+        $items = collect($allocations)->map(function (array $allocation) use ($serversByPteroId): array {
+            $assignedPanelServerIdString = $this->normalizePanelServerId($allocation['server_id'] ?? null);
+            $linkedServer = $assignedPanelServerIdString !== null
+                ? $serversByPteroId->get($assignedPanelServerIdString)
+                : null;
+
+            $linkedServerPayload = null;
+
+            if ($linkedServer instanceof Server) {
+                $linkedServerPayload = [
+                    'id' => $linkedServer->id,
+                    'uuid' => $linkedServer->uuid,
+                    'name' => $this->resolveServerName($this->decodeConfig($linkedServer->config)),
+                    'status' => $linkedServer->status,
+                    'plan' => $linkedServer->plan,
+                    'owner' => $this->transformUser($linkedServer->user),
+                ];
+            }
+
+            $pteroServerId = $this->normalizePositiveInteger($allocation['server_id'] ?? null);
+            $assigned = (bool) ($allocation['assigned'] ?? false) || $pteroServerId !== null;
+
+            return [
+                'id' => $allocation['id'] ?? null,
+                'ip' => is_string($allocation['ip'] ?? null) ? trim((string) $allocation['ip']) : null,
+                'alias' => is_string($allocation['alias'] ?? null) ? trim((string) $allocation['alias']) : null,
+                'port' => $this->normalizePositiveInteger($allocation['port'] ?? null),
+                'assigned' => $assigned,
+                'ptero_server_id' => $pteroServerId,
+                'server' => $linkedServerPayload,
+            ];
+        })->sortBy([
+            ['ip', 'asc'],
+            ['port', 'asc'],
+        ])->values()->all();
+
+        $assignedCount = collect($items)->filter(fn (array $item): bool => (bool) $item['assigned'])->count();
+        $totalCount = count($items);
+
+        return [
+            'items' => $items,
+            'counts' => [
+                'total' => $totalCount,
+                'assigned' => $assignedCount,
+                'unassigned' => max($totalCount - $assignedCount, 0),
+            ],
+            'error' => null,
+        ];
+    }
+
+    /**
+     * @param  Collection<int, string>  $panelServerIds
+     * @return Collection<string, Server>
+     */
+    private function resolveServersByPteroId(Collection $panelServerIds): Collection
+    {
+        $normalizedServerIds = $panelServerIds
+            ->filter(fn (string $panelServerId): bool => trim($panelServerId) !== '')
+            ->map(fn (string $panelServerId): string => trim($panelServerId))
+            ->unique()
+            ->values();
+
+        if ($normalizedServerIds->isEmpty()) {
+            return collect();
+        }
+
+        $servers = Server::query()
+            ->with('user')
+            ->whereIn('ptero_id', $normalizedServerIds->all())
+            ->get();
+
+        $serversByPteroId = collect();
+
+        foreach ($servers as $server) {
+            $pteroId = trim((string) ($server->ptero_id ?? ''));
+
+            if ($pteroId !== '') {
+                $serversByPteroId->put($pteroId, $server);
+            }
+        }
+
+        return $serversByPteroId;
+    }
+
+    private function normalizePanelServerId(mixed $panelServerId): ?string
+    {
+        if (is_int($panelServerId) && $panelServerId > 0) {
+            return (string) $panelServerId;
+        }
+
+        if (is_string($panelServerId) && preg_match('/^\d+$/', trim($panelServerId)) === 1) {
+            $normalized = trim($panelServerId);
+
+            return $normalized !== '0' ? $normalized : null;
+        }
+
+        return null;
+    }
+
+    private function normalizePositiveInteger(mixed $value): ?int
+    {
+        if (is_int($value) && $value > 0) {
+            return $value;
+        }
+
+        if (is_string($value) && preg_match('/^\d+$/', trim($value)) === 1) {
+            $normalized = (int) trim($value);
+
+            return $normalized > 0 ? $normalized : null;
+        }
+
+        return null;
     }
 
     /**

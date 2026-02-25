@@ -4,6 +4,8 @@ namespace Tests\Feature;
 
 use App\Jobs\SyncNodeToPterodactylJob;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\Client\Request as HttpClientRequest;
+use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Queue;
 use Interadigital\CoreModels\Models\Node;
 use Interadigital\CoreModels\Models\Server;
@@ -143,6 +145,42 @@ class NodeApiTest extends TestCase
 
     public function test_admin_can_view_node_profile_with_24_hour_performance_and_servers(): void
     {
+        config()->set('services.pterodactyl', [
+            'base_url' => 'https://panel.example.test',
+            'application_api_key' => 'test-app-api-key',
+            'client_api_key' => 'test-client-api-key',
+            'timeout' => 15,
+        ]);
+
+        Http::fake([
+            'https://panel.example.test/api/application/nodes/42/allocations*' => Http::response([
+                'data' => [
+                    [
+                        'object' => 'allocation',
+                        'attributes' => [
+                            'id' => 90001,
+                            'ip' => '203.0.113.12',
+                            'port' => 25565,
+                            'alias' => 'main-game',
+                            'assigned' => true,
+                            'server_id' => 9001,
+                        ],
+                    ],
+                    [
+                        'object' => 'allocation',
+                        'attributes' => [
+                            'id' => 90002,
+                            'ip' => '203.0.113.12',
+                            'port' => 25566,
+                            'alias' => null,
+                            'assigned' => false,
+                            'server_id' => null,
+                        ],
+                    ],
+                ],
+            ], 200),
+        ]);
+
         $token = $this->authenticateAdmin();
 
         $node = Node::factory()->create([
@@ -150,6 +188,7 @@ class NodeApiTest extends TestCase
             'name' => 'Node Profile',
             'region' => 'eu.de',
             'ip_address' => '203.0.113.12',
+            'ptero_node_id' => 42,
         ]);
 
         TelemetryNode::factory()->create([
@@ -188,6 +227,7 @@ class NodeApiTest extends TestCase
             'uuid' => '11111111-1111-1111-1111-111111111111',
             'status' => 'active',
             'plan' => 'panda',
+            'ptero_id' => '9001',
             'config' => json_encode(['name' => 'Chronicles Realm']),
         ]);
 
@@ -217,7 +257,17 @@ class NodeApiTest extends TestCase
             ->assertJsonPath('data.name', 'Node Profile')
             ->assertJsonPath('data.performance_last_24h.latest.cpu_pct', 66.8)
             ->assertJsonPath('data.performance_last_24h.latest.iowait_pct', 3.2)
-            ->assertJsonPath('data.servers_count', 2);
+            ->assertJsonPath('data.servers_count', 2)
+            ->assertJsonPath('data.allocations_count', 2)
+            ->assertJsonPath('data.assigned_allocations_count', 1)
+            ->assertJsonPath('data.unassigned_allocations_count', 1)
+            ->assertJsonPath('data.allocations.0.port', 25565)
+            ->assertJsonPath('data.allocations.0.assigned', true)
+            ->assertJsonPath('data.allocations.0.ptero_server_id', 9001)
+            ->assertJsonPath('data.allocations.0.server.id', $linkedServer->id)
+            ->assertJsonPath('data.allocations.1.port', 25566)
+            ->assertJsonPath('data.allocations.1.assigned', false)
+            ->assertJsonPath('data.allocations.1.server', null);
 
         /** @var list<array<string, mixed>> $samples */
         $samples = $response->json('data.performance_last_24h.samples');
@@ -236,6 +286,11 @@ class NodeApiTest extends TestCase
         $unlinkedTelemetry = collect($servers)->firstWhere('server_id', 'external-server-1');
         $this->assertIsArray($unlinkedTelemetry);
         $this->assertNull(data_get($unlinkedTelemetry, 'server'));
+
+        Http::assertSent(function (HttpClientRequest $request): bool {
+            return $request->method() === 'GET'
+                && str_starts_with($request->url(), 'https://panel.example.test/api/application/nodes/42/allocations');
+        });
     }
 
     public function test_admin_can_delete_node_and_associated_telemetry_rows(): void
