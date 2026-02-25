@@ -41,6 +41,30 @@ Create a node and get its one-time token from orchestrator (admin auth required)
 
 `POST /api/nodes`
 
+Required request payload fields:
+
+```json
+{
+  "name": "Frankfurt Wings Node",
+  "region": "eu.de",
+  "ip_address": "203.0.113.10",
+  "ptero_location_id": 1,
+  "fqdn": "wings-eu-de.example.com",
+  "scheme": "https",
+  "behind_proxy": true,
+  "memory": 32768,
+  "memory_overallocate": 0,
+  "disk": 204800,
+  "disk_overallocate": 0,
+  "upload_size": 500,
+  "daemon_sftp": 2022,
+  "daemon_listen": 8080,
+  "allocation_ip": "203.0.113.10",
+  "allocation_alias": "wings-eu-de",
+  "allocation_ports": ["25565-25580", "30500"]
+}
+```
+
 Example response excerpt:
 
 ```json
@@ -50,6 +74,7 @@ Example response excerpt:
     "name": "Frankfurt Wings Node",
     "region": "eu.de",
     "ip_address": "203.0.113.10",
+    "sync_status": "pending",
     "node_token": "one-time-raw-token"
   }
 }

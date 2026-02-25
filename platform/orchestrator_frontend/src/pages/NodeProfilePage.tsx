@@ -431,6 +431,98 @@ export default function NodeProfilePage() {
 
         <div className="rounded-xl border border-slate-200 bg-white">
           <div className="border-b border-slate-200 px-6 py-4">
+            <h3 className="text-base font-semibold text-slate-900">Pterodactyl Allocations</h3>
+            <p className="text-sm text-slate-500">
+              {node.allocations_count} allocation{node.allocations_count === 1 ? '' : 's'} total,{' '}
+              {node.assigned_allocations_count} assigned, {node.unassigned_allocations_count} unassigned.
+            </p>
+          </div>
+
+          {node.allocations_error ? (
+            <div className="px-6 py-5">
+              <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+                {node.allocations_error}
+              </div>
+            </div>
+          ) : node.allocations.length === 0 ? (
+            <p className="px-6 py-5 text-sm text-slate-500">
+              No allocations were returned for this node.
+            </p>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="min-w-full divide-y divide-slate-200">
+                <thead className="bg-slate-50">
+                  <tr>
+                    <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-slate-500">
+                      Allocation
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-slate-500">
+                      Alias
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-slate-500">
+                      Assigned Server
+                    </th>
+                    <th className="px-6 py-3 text-right text-xs font-medium uppercase tracking-wider text-slate-500">
+                      Panel Server ID
+                    </th>
+                    <th className="px-6 py-3 text-right text-xs font-medium uppercase tracking-wider text-slate-500">
+                      Status
+                    </th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {node.allocations.map((entry) => {
+                    const key = String(entry.id ?? `${entry.ip ?? 'unknown'}-${entry.port ?? 'unknown'}`)
+
+                    return (
+                      <tr key={key} className="hover:bg-slate-50">
+                        <td className="whitespace-nowrap px-6 py-4">
+                          <p className="font-mono text-sm text-slate-900">
+                            {(entry.ip ?? '-')}:{entry.port ?? '-'}
+                          </p>
+                        </td>
+                        <td className="whitespace-nowrap px-6 py-4 text-sm text-slate-600">
+                          {entry.alias ?? '-'}
+                        </td>
+                        <td className="whitespace-nowrap px-6 py-4">
+                          {entry.server?.id ? (
+                            <Link
+                              to={`/servers/${entry.server.id}`}
+                              className="text-sm font-medium text-indigo-600 hover:text-indigo-700"
+                            >
+                              {entry.server.name}
+                            </Link>
+                          ) : entry.ptero_server_id ? (
+                            <p className="text-sm text-slate-700">Panel server #{entry.ptero_server_id}</p>
+                          ) : (
+                            <p className="text-sm text-slate-500">-</p>
+                          )}
+                        </td>
+                        <td className="whitespace-nowrap px-6 py-4 text-right font-mono text-sm text-slate-700">
+                          {entry.ptero_server_id ?? '-'}
+                        </td>
+                        <td className="whitespace-nowrap px-6 py-4 text-right text-sm">
+                          <span
+                            className={
+                              entry.assigned
+                                ? 'rounded-full bg-indigo-50 px-2.5 py-1 text-indigo-700'
+                                : 'rounded-full bg-slate-100 px-2.5 py-1 text-slate-600'
+                            }
+                          >
+                            {entry.assigned ? 'Assigned' : 'Available'}
+                          </span>
+                        </td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+
+        <div className="rounded-xl border border-slate-200 bg-white">
+          <div className="border-b border-slate-200 px-6 py-4">
             <h3 className="text-base font-semibold text-slate-900">Servers on Node</h3>
             <p className="text-sm text-slate-500">
               {node.servers_count} server{node.servers_count === 1 ? '' : 's'} currently mapped to this node.

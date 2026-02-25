@@ -2,7 +2,11 @@
 
 namespace Tests\Feature;
 
+use App\Jobs\SyncNodeToPterodactylJob;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\Client\Request as HttpClientRequest;
+use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Queue;
 use Interadigital\CoreModels\Models\Node;
 use Interadigital\CoreModels\Models\Server;
 use Interadigital\CoreModels\Models\TelemetryNode;
@@ -16,25 +20,70 @@ class NodeApiTest extends TestCase
 
     public function test_admin_can_create_node_and_receive_one_time_token(): void
     {
+        config()->set('services.pterodactyl', [
+            'base_url' => 'https://panel.example.test',
+            'application_api_key' => 'test-app-api-key',
+            'client_api_key' => 'test-client-api-key',
+            'timeout' => 15,
+        ]);
+
         $token = $this->authenticateAdmin();
+        Queue::fake();
 
         $response = $this->withHeader('Authorization', 'Bearer '.$token)
             ->postJson('/api/nodes', [
                 'name' => 'Frankfurt Wings Node',
                 'region' => 'eu.de',
                 'ip_address' => '203.0.113.10',
+                'ptero_location_id' => 1,
+                'fqdn' => 'wings-eu-de.example.test',
+                'scheme' => 'https',
+                'behind_proxy' => true,
+                'memory' => 32768,
+                'memory_overallocate' => 0,
+                'disk' => 204800,
+                'disk_overallocate' => 0,
+                'upload_size' => 500,
+                'daemon_sftp' => 2022,
+                'daemon_listen' => 8080,
+                'allocation_ip' => '203.0.113.10',
+                'allocation_alias' => 'frankfurt-main',
+                'allocation_ports' => ['25565-25570', 30500],
             ]);
 
         $response->assertCreated()
             ->assertJsonPath('data.name', 'Frankfurt Wings Node')
             ->assertJsonPath('data.region', 'eu.de')
             ->assertJsonPath('data.ip_address', '203.0.113.10')
+            ->assertJsonPath('data.ptero_location_id', 1)
+            ->assertJsonPath('data.fqdn', 'wings-eu-de.example.test')
+            ->assertJsonPath('data.sync_status', Node::SYNC_STATUS_PENDING)
+            ->assertJsonPath('data.allocation_ports.0', '25565-25570')
+            ->assertJsonPath('data.allocation_ports.1', '30500')
             ->assertJsonStructure([
                 'data' => [
                     'id',
                     'name',
                     'region',
                     'ip_address',
+                    'ptero_location_id',
+                    'fqdn',
+                    'scheme',
+                    'behind_proxy',
+                    'maintenance_mode',
+                    'memory',
+                    'memory_overallocate',
+                    'disk',
+                    'disk_overallocate',
+                    'upload_size',
+                    'daemon_sftp',
+                    'daemon_listen',
+                    'allocation_ip',
+                    'allocation_alias',
+                    'allocation_ports',
+                    'sync_status',
+                    'sync_error',
+                    'synced_at',
                     'last_active_at',
                     'last_used_at',
                     'created_at',
@@ -51,6 +100,12 @@ class NodeApiTest extends TestCase
         $this->assertNotNull($node);
         $this->assertNotSame($rawToken, $node->token_hash);
         $this->assertTrue($node->matchesToken($rawToken));
+        $this->assertSame(1, $node->ptero_location_id);
+        $this->assertSame('wings-eu-de.example.test', $node->fqdn);
+        $this->assertSame(['25565-25570', '30500'], $node->allocation_ports);
+        $this->assertSame(Node::SYNC_STATUS_PENDING, $node->sync_status);
+
+        Queue::assertPushed(SyncNodeToPterodactylJob::class, 1);
     }
 
     public function test_admin_can_list_nodes_without_exposing_token_hash(): void
@@ -90,6 +145,42 @@ class NodeApiTest extends TestCase
 
     public function test_admin_can_view_node_profile_with_24_hour_performance_and_servers(): void
     {
+        config()->set('services.pterodactyl', [
+            'base_url' => 'https://panel.example.test',
+            'application_api_key' => 'test-app-api-key',
+            'client_api_key' => 'test-client-api-key',
+            'timeout' => 15,
+        ]);
+
+        Http::fake([
+            'https://panel.example.test/api/application/nodes/42/allocations*' => Http::response([
+                'data' => [
+                    [
+                        'object' => 'allocation',
+                        'attributes' => [
+                            'id' => 90001,
+                            'ip' => '203.0.113.12',
+                            'port' => 25565,
+                            'alias' => 'main-game',
+                            'assigned' => true,
+                            'server_id' => 9001,
+                        ],
+                    ],
+                    [
+                        'object' => 'allocation',
+                        'attributes' => [
+                            'id' => 90002,
+                            'ip' => '203.0.113.12',
+                            'port' => 25566,
+                            'alias' => null,
+                            'assigned' => false,
+                            'server_id' => null,
+                        ],
+                    ],
+                ],
+            ], 200),
+        ]);
+
         $token = $this->authenticateAdmin();
 
         $node = Node::factory()->create([
@@ -97,6 +188,7 @@ class NodeApiTest extends TestCase
             'name' => 'Node Profile',
             'region' => 'eu.de',
             'ip_address' => '203.0.113.12',
+            'ptero_node_id' => 42,
         ]);
 
         TelemetryNode::factory()->create([
@@ -135,6 +227,7 @@ class NodeApiTest extends TestCase
             'uuid' => '11111111-1111-1111-1111-111111111111',
             'status' => 'active',
             'plan' => 'panda',
+            'ptero_id' => '9001',
             'config' => json_encode(['name' => 'Chronicles Realm']),
         ]);
 
@@ -164,7 +257,17 @@ class NodeApiTest extends TestCase
             ->assertJsonPath('data.name', 'Node Profile')
             ->assertJsonPath('data.performance_last_24h.latest.cpu_pct', 66.8)
             ->assertJsonPath('data.performance_last_24h.latest.iowait_pct', 3.2)
-            ->assertJsonPath('data.servers_count', 2);
+            ->assertJsonPath('data.servers_count', 2)
+            ->assertJsonPath('data.allocations_count', 2)
+            ->assertJsonPath('data.assigned_allocations_count', 1)
+            ->assertJsonPath('data.unassigned_allocations_count', 1)
+            ->assertJsonPath('data.allocations.0.port', 25565)
+            ->assertJsonPath('data.allocations.0.assigned', true)
+            ->assertJsonPath('data.allocations.0.ptero_server_id', 9001)
+            ->assertJsonPath('data.allocations.0.server.id', $linkedServer->id)
+            ->assertJsonPath('data.allocations.1.port', 25566)
+            ->assertJsonPath('data.allocations.1.assigned', false)
+            ->assertJsonPath('data.allocations.1.server', null);
 
         /** @var list<array<string, mixed>> $samples */
         $samples = $response->json('data.performance_last_24h.samples');
@@ -183,6 +286,11 @@ class NodeApiTest extends TestCase
         $unlinkedTelemetry = collect($servers)->firstWhere('server_id', 'external-server-1');
         $this->assertIsArray($unlinkedTelemetry);
         $this->assertNull(data_get($unlinkedTelemetry, 'server'));
+
+        Http::assertSent(function (HttpClientRequest $request): bool {
+            return $request->method() === 'GET'
+                && str_starts_with($request->url(), 'https://panel.example.test/api/application/nodes/42/allocations');
+        });
     }
 
     public function test_admin_can_delete_node_and_associated_telemetry_rows(): void
