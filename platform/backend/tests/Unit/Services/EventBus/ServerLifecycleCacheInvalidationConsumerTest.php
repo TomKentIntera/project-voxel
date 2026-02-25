@@ -5,8 +5,8 @@ declare(strict_types=1);
 namespace Tests\Unit\Services\EventBus;
 
 use App\Services\EventBus\ServerLifecycleCacheInvalidationConsumer;
-use App\Services\EventBus\ServerProvisionedNotificationDispatcher;
-use App\Services\LocationsCacheReader;
+use App\Services\EventBus\ServerLifecycleCacheInvalidationEventConsumer;
+use App\Services\EventBus\ServerProvisionedNotificationEventConsumer;
 use Illuminate\Support\Facades\Http;
 use Mockery;
 use Tests\TestCase;
@@ -28,18 +28,23 @@ class ServerLifecycleCacheInvalidationConsumerTest extends TestCase
 
     public function test_it_invalidates_locations_cache_for_supported_event_types(): void
     {
-        $reader = Mockery::mock(LocationsCacheReader::class);
-        $reader->shouldReceive('forgetCachedPayload')->once();
-        $this->app->instance(LocationsCacheReader::class, $reader);
-
-        $dispatcher = Mockery::mock(ServerProvisionedNotificationDispatcher::class);
-        $dispatcher->shouldReceive('dispatch')
+        $cacheInvalidationConsumer = Mockery::mock(ServerLifecycleCacheInvalidationEventConsumer::class);
+        $cacheInvalidationConsumer->shouldReceive('consume')
             ->once()
             ->withArgs(static function (array $payload): bool {
                 return ($payload['event_type'] ?? null) === 'server.provisioned'
                     && ($payload['server_id'] ?? null) === 123;
             });
-        $this->app->instance(ServerProvisionedNotificationDispatcher::class, $dispatcher);
+        $this->app->instance(ServerLifecycleCacheInvalidationEventConsumer::class, $cacheInvalidationConsumer);
+
+        $provisionedNotificationConsumer = Mockery::mock(ServerProvisionedNotificationEventConsumer::class);
+        $provisionedNotificationConsumer->shouldReceive('consume')
+            ->once()
+            ->withArgs(static function (array $payload): bool {
+                return ($payload['event_type'] ?? null) === 'server.provisioned'
+                    && ($payload['server_id'] ?? null) === 123;
+            });
+        $this->app->instance(ServerProvisionedNotificationEventConsumer::class, $provisionedNotificationConsumer);
 
         Http::fakeSequence()
             ->push($this->receiveMessageResponseXml('server.provisioned', ['server_id' => 123]), 200)
@@ -54,13 +59,13 @@ class ServerLifecycleCacheInvalidationConsumerTest extends TestCase
 
     public function test_it_ignores_non_lifecycle_events(): void
     {
-        $reader = Mockery::mock(LocationsCacheReader::class);
-        $reader->shouldNotReceive('forgetCachedPayload');
-        $this->app->instance(LocationsCacheReader::class, $reader);
+        $cacheInvalidationConsumer = Mockery::mock(ServerLifecycleCacheInvalidationEventConsumer::class);
+        $cacheInvalidationConsumer->shouldNotReceive('consume');
+        $this->app->instance(ServerLifecycleCacheInvalidationEventConsumer::class, $cacheInvalidationConsumer);
 
-        $dispatcher = Mockery::mock(ServerProvisionedNotificationDispatcher::class);
-        $dispatcher->shouldNotReceive('dispatch');
-        $this->app->instance(ServerProvisionedNotificationDispatcher::class, $dispatcher);
+        $provisionedNotificationConsumer = Mockery::mock(ServerProvisionedNotificationEventConsumer::class);
+        $provisionedNotificationConsumer->shouldNotReceive('consume');
+        $this->app->instance(ServerProvisionedNotificationEventConsumer::class, $provisionedNotificationConsumer);
 
         Http::fakeSequence()
             ->push($this->receiveMessageResponseXml('server.ordered.v1'), 200)
@@ -73,15 +78,41 @@ class ServerLifecycleCacheInvalidationConsumerTest extends TestCase
         $this->assertSame(0, $processed);
     }
 
+    public function test_it_fans_out_to_only_cache_invalidation_for_migrated_events(): void
+    {
+        $cacheInvalidationConsumer = Mockery::mock(ServerLifecycleCacheInvalidationEventConsumer::class);
+        $cacheInvalidationConsumer->shouldReceive('consume')
+            ->once()
+            ->withArgs(static function (array $payload): bool {
+                return ($payload['event_type'] ?? null) === 'server.migrated'
+                    && ($payload['server_id'] ?? null) === 456;
+            });
+        $this->app->instance(ServerLifecycleCacheInvalidationEventConsumer::class, $cacheInvalidationConsumer);
+
+        $provisionedNotificationConsumer = Mockery::mock(ServerProvisionedNotificationEventConsumer::class);
+        $provisionedNotificationConsumer->shouldNotReceive('consume');
+        $this->app->instance(ServerProvisionedNotificationEventConsumer::class, $provisionedNotificationConsumer);
+
+        Http::fakeSequence()
+            ->push($this->receiveMessageResponseXml('server.migrated', ['server_id' => 456]), 200)
+            ->push($this->deleteMessageResponseXml(), 200);
+
+        $consumer = app(ServerLifecycleCacheInvalidationConsumer::class);
+
+        $processed = $consumer->consumeBatch(maxMessages: 1, waitTimeSeconds: 0);
+
+        $this->assertSame(1, $processed);
+    }
+
     public function test_it_skips_missing_queue_errors_without_failing_the_consumer_loop(): void
     {
-        $reader = Mockery::mock(LocationsCacheReader::class);
-        $reader->shouldNotReceive('forgetCachedPayload');
-        $this->app->instance(LocationsCacheReader::class, $reader);
+        $cacheInvalidationConsumer = Mockery::mock(ServerLifecycleCacheInvalidationEventConsumer::class);
+        $cacheInvalidationConsumer->shouldNotReceive('consume');
+        $this->app->instance(ServerLifecycleCacheInvalidationEventConsumer::class, $cacheInvalidationConsumer);
 
-        $dispatcher = Mockery::mock(ServerProvisionedNotificationDispatcher::class);
-        $dispatcher->shouldNotReceive('dispatch');
-        $this->app->instance(ServerProvisionedNotificationDispatcher::class, $dispatcher);
+        $provisionedNotificationConsumer = Mockery::mock(ServerProvisionedNotificationEventConsumer::class);
+        $provisionedNotificationConsumer->shouldNotReceive('consume');
+        $this->app->instance(ServerProvisionedNotificationEventConsumer::class, $provisionedNotificationConsumer);
 
         Http::fakeSequence()
             ->push($this->nonExistentQueueErrorXml(), 400);

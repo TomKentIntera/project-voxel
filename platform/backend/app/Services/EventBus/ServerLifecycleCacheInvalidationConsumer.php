@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace App\Services\EventBus;
 
-use App\Services\LocationsCacheReader;
 use Illuminate\Http\Client\Response;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
@@ -15,27 +14,32 @@ use Throwable;
 
 class ServerLifecycleCacheInvalidationConsumer
 {
-    /**
-     * @var list<string>
-     */
-    private const INVALIDATING_EVENT_TYPES = [
-        'server.provisioned',
-        'server.provisioned.v1',
-        'server.migrated',
-        'server.migrated.v1',
-    ];
+    private const CACHE_INVALIDATION_CONSUMER = 'cache_invalidation';
+    private const PROVISIONED_NOTIFICATION_CONSUMER = 'provisioned_notification';
 
     /**
-     * @var list<string>
+     * @var array<string, list<string>>
      */
-    private const PROVISIONED_EVENT_TYPES = [
-        'server.provisioned',
-        'server.provisioned.v1',
+    private const EVENT_TYPE_TO_CONSUMERS = [
+        'server.provisioned' => [
+            self::CACHE_INVALIDATION_CONSUMER,
+            self::PROVISIONED_NOTIFICATION_CONSUMER,
+        ],
+        'server.provisioned.v1' => [
+            self::CACHE_INVALIDATION_CONSUMER,
+            self::PROVISIONED_NOTIFICATION_CONSUMER,
+        ],
+        'server.migrated' => [
+            self::CACHE_INVALIDATION_CONSUMER,
+        ],
+        'server.migrated.v1' => [
+            self::CACHE_INVALIDATION_CONSUMER,
+        ],
     ];
 
     public function __construct(
-        private readonly LocationsCacheReader $locationsCacheReader,
-        private readonly ServerProvisionedNotificationDispatcher $serverProvisionedNotificationDispatcher,
+        private readonly ServerLifecycleCacheInvalidationEventConsumer $serverLifecycleCacheInvalidationEventConsumer,
+        private readonly ServerProvisionedNotificationEventConsumer $serverProvisionedNotificationEventConsumer,
     ) {}
 
     public function consumeBatch(int $maxMessages = 10, int $waitTimeSeconds = 20): int
@@ -77,16 +81,8 @@ class ServerLifecycleCacheInvalidationConsumer
                     continue;
                 }
 
-                if (in_array($eventType, self::INVALIDATING_EVENT_TYPES, true)) {
-                    $this->locationsCacheReader->forgetCachedPayload();
+                if (is_array($eventPayload) && $this->fanOutToEventConsumers($eventType, $eventPayload)) {
                     $processedCount++;
-
-                    if (
-                        is_array($eventPayload)
-                        && in_array($eventType, self::PROVISIONED_EVENT_TYPES, true)
-                    ) {
-                        $this->serverProvisionedNotificationDispatcher->dispatch($eventPayload);
-                    }
                 }
 
                 $this->deleteMessage($queueUrl, $receiptHandle);
@@ -211,6 +207,35 @@ class ServerLifecycleCacheInvalidationConsumer
         $eventType = trim((string) ($eventPayload['event_type'] ?? ''));
 
         return $eventType !== '' ? $eventType : null;
+    }
+
+    /**
+     * @param array<string, mixed> $eventPayload
+     */
+    private function fanOutToEventConsumers(string $eventType, array $eventPayload): bool
+    {
+        $consumerKeys = self::EVENT_TYPE_TO_CONSUMERS[$eventType] ?? [];
+        if ($consumerKeys === []) {
+            return false;
+        }
+
+        foreach ($consumerKeys as $consumerKey) {
+            $this->resolveConsumer($consumerKey)->consume($eventPayload);
+        }
+
+        return true;
+    }
+
+    private function resolveConsumer(string $consumerKey): ServerLifecycleEventConsumer
+    {
+        return match ($consumerKey) {
+            self::CACHE_INVALIDATION_CONSUMER => $this->serverLifecycleCacheInvalidationEventConsumer,
+            self::PROVISIONED_NOTIFICATION_CONSUMER => $this->serverProvisionedNotificationEventConsumer,
+            default => throw new RuntimeException(sprintf(
+                'Unsupported server lifecycle consumer key "%s".',
+                $consumerKey,
+            )),
+        };
     }
 
     /**
