@@ -88,6 +88,21 @@ Reset the stack and rerun fresh migrations:
 and then executes `php artisan test:provision-local` in the orchestrator service to
 recreate a single local test node with default allocation ports.
 
+During reset, the script also:
+
+- removes the testing `pterodactyl-wings` container,
+- removes Wings-managed server containers (`Service=Pterodactyl`, `ContainerType=server_process`),
+- clears local Wings runtime directories under `/tmp/pterodactyl*`,
+- reseeds a default Pterodactyl panel admin user.
+
+Default panel admin values seeded on reset (override with environment variables):
+
+- `PTERODACTYL_ADMIN_EMAIL=tom@intera.digital`
+- `PTERODACTYL_ADMIN_USERNAME=tom`
+- `PTERODACTYL_ADMIN_FIRST_NAME=Tom`
+- `PTERODACTYL_ADMIN_LAST_NAME=Kent`
+- `PTERODACTYL_ADMIN_PASSWORD=secret1234`
+
 Optional reset flags:
 
 ```bash

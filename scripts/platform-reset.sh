@@ -57,7 +57,20 @@ destroy_wings_containers() {
   docker compose --profile testing rm -f pterodactyl-wings >/dev/null 2>&1 || true
 }
 
+destroy_wings_server_state() {
+  echo "Destroying Wings-managed server containers and runtime data..."
+
+  managed_server_containers="$(docker ps -aq --filter label=Service=Pterodactyl --filter label=ContainerType=server_process 2>/dev/null || true)"
+  if [ -n "$managed_server_containers" ]; then
+    # shellcheck disable=SC2086
+    docker rm -f $managed_server_containers >/dev/null 2>&1 || true
+  fi
+
+  rm -rf /tmp/pterodactyl/* /tmp/pterodactyl-logs/* /tmp/pterodactyl-tmp/* 2>/dev/null || true
+}
+
 destroy_wings_containers
+destroy_wings_server_state
 
 if [ "$rebuild" = "true" ]; then
   $compose_cmd down --remove-orphans
@@ -79,6 +92,24 @@ SQL
 }
 
 ensure_pterodactyl_database
+
+seed_pterodactyl_admin_user() {
+  admin_email="${PTERODACTYL_ADMIN_EMAIL:-tom@intera.digital}"
+  admin_username="${PTERODACTYL_ADMIN_USERNAME:-tom}"
+  admin_first_name="${PTERODACTYL_ADMIN_FIRST_NAME:-Tom}"
+  admin_last_name="${PTERODACTYL_ADMIN_LAST_NAME:-Kent}"
+  admin_password="${PTERODACTYL_ADMIN_PASSWORD:-secret1234}"
+
+  echo "Seeding Pterodactyl admin user (${admin_email})..."
+  docker compose exec -T pterodactyl-panel php artisan p:user:make \
+    --email="$admin_email" \
+    --username="$admin_username" \
+    --name-first="$admin_first_name" \
+    --name-last="$admin_last_name" \
+    --password="$admin_password" \
+    --admin=1 \
+    --no-interaction
+}
 
 if [ -x "$SCRIPT_DIR/event-bus-terraform.sh" ]; then
   "$SCRIPT_DIR/event-bus-terraform.sh" local apply --auto-approve
@@ -115,6 +146,8 @@ else
   docker compose exec -T legacy php artisan migrate:fresh --force --no-interaction
   docker compose exec -T pterodactyl-panel php artisan migrate:fresh --force --no-interaction
 fi
+
+seed_pterodactyl_admin_user
 
 docker compose exec -T orchestrator php artisan test:provision-local --no-interaction
 
