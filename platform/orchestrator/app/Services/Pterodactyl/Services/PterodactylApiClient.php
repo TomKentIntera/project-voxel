@@ -54,6 +54,34 @@ class PterodactylApiClient
     }
 
     /**
+     * @param  array<string, mixed>  $payload
+     * @return array<string, mixed>
+     */
+    public function createNode(array $payload): array
+    {
+        return $this->unwrapAttributes($this->applicationSend('POST', '/nodes', payload: $payload));
+    }
+
+    /**
+     * @return list<array<string, mixed>>
+     */
+    public function listNodeAllocations(int|string $nodeId): array
+    {
+        return $this->unwrapDataList(
+            $this->applicationSend('GET', '/nodes/'.$nodeId.'/allocations', query: ['per_page' => 1000])
+        );
+    }
+
+    /**
+     * @param  array<string, mixed>  $payload
+     * @return array<string, mixed>
+     */
+    public function createNodeAllocations(int|string $nodeId, array $payload): array
+    {
+        return $this->applicationSend('POST', '/nodes/'.$nodeId.'/allocations', payload: $payload);
+    }
+
+    /**
      * @return list<array<string, mixed>>
      */
     public function listNests(bool $includeEggs = false): array

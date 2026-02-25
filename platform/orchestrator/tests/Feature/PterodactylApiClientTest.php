@@ -56,6 +56,119 @@ class PterodactylApiClientTest extends TestCase
         });
     }
 
+    public function test_create_node_posts_required_payload_and_returns_attributes(): void
+    {
+        Http::fake([
+            'https://panel.example.com/api/application/nodes' => Http::response([
+                'object' => 'node',
+                'attributes' => [
+                    'id' => 12,
+                    'name' => 'Frankfurt Wings Node',
+                ],
+            ], 201),
+        ]);
+
+        $client = app(PterodactylApiClient::class);
+
+        $node = $client->createNode([
+            'name' => 'Frankfurt Wings Node',
+            'location_id' => 1,
+            'fqdn' => 'wings-eu-de.example.com',
+            'scheme' => 'https',
+            'behind_proxy' => true,
+            'maintenance_mode' => false,
+            'memory' => 32768,
+            'memory_overallocate' => 0,
+            'disk' => 204800,
+            'disk_overallocate' => 0,
+            'upload_size' => 500,
+            'daemon_sftp' => 2022,
+            'daemon_listen' => 8080,
+        ]);
+
+        $this->assertSame(12, $node['id']);
+        $this->assertSame('Frankfurt Wings Node', $node['name']);
+
+        Http::assertSent(function (Request $request): bool {
+            return $request->method() === 'POST'
+                && $request->url() === 'https://panel.example.com/api/application/nodes'
+                && $request->hasHeader('Authorization', 'Bearer app-api-token')
+                && ($request->data()['name'] ?? null) === 'Frankfurt Wings Node'
+                && ($request->data()['location_id'] ?? null) === 1
+                && ($request->data()['daemon_sftp'] ?? null) === 2022
+                && ($request->data()['daemon_listen'] ?? null) === 8080;
+        });
+    }
+
+    public function test_list_node_allocations_unwraps_attributes(): void
+    {
+        Http::fake([
+            'https://panel.example.com/api/application/nodes/12/allocations*' => Http::response([
+                'data' => [
+                    [
+                        'object' => 'allocation',
+                        'attributes' => [
+                            'id' => 101,
+                            'ip' => '203.0.113.10',
+                            'port' => 25565,
+                        ],
+                    ],
+                    [
+                        'object' => 'allocation',
+                        'attributes' => [
+                            'id' => 102,
+                            'ip' => '203.0.113.10',
+                            'port' => 25566,
+                        ],
+                    ],
+                ],
+            ]),
+        ]);
+
+        $client = app(PterodactylApiClient::class);
+        $allocations = $client->listNodeAllocations(12);
+
+        $this->assertCount(2, $allocations);
+        $this->assertSame(25565, $allocations[0]['port']);
+        $this->assertSame(25566, $allocations[1]['port']);
+
+        Http::assertSent(function (Request $request): bool {
+            $queryString = parse_url($request->url(), PHP_URL_QUERY);
+            parse_str(is_string($queryString) ? $queryString : '', $query);
+
+            return $request->method() === 'GET'
+                && str_starts_with($request->url(), 'https://panel.example.com/api/application/nodes/12/allocations')
+                && ($query['per_page'] ?? null) === '1000';
+        });
+    }
+
+    public function test_create_node_allocations_posts_payload(): void
+    {
+        Http::fake([
+            'https://panel.example.com/api/application/nodes/12/allocations' => Http::response([
+                'object' => 'allocation',
+            ], 201),
+        ]);
+
+        $client = app(PterodactylApiClient::class);
+
+        $response = $client->createNodeAllocations(12, [
+            'ip' => '203.0.113.10',
+            'alias' => 'wings-eu-de',
+            'ports' => ['25565', '25566'],
+        ]);
+
+        $this->assertSame('allocation', $response['object']);
+
+        Http::assertSent(function (Request $request): bool {
+            return $request->method() === 'POST'
+                && $request->url() === 'https://panel.example.com/api/application/nodes/12/allocations'
+                && ($request->data()['ip'] ?? null) === '203.0.113.10'
+                && ($request->data()['alias'] ?? null) === 'wings-eu-de'
+                && ($request->data()['ports'] ?? null) === ['25565', '25566'];
+        });
+    }
+
     public function test_list_locations_can_request_nodes_relationship_and_unwrap_attributes(): void
     {
         Http::fake([
