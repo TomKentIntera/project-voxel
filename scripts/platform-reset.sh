@@ -14,10 +14,12 @@ usage() {
   cat <<'EOF'
 Usage: scripts/platform-reset.sh [--rebuild] [--seed] [--with-wings]
 
+Resets application data to a blank slate without rebuilding the full stack.
+
 Options:
-  --rebuild     Recreate containers and rebuild images before starting.
-  --seed        Run database seeders after migrate:fresh.
-  --with-wings  Start testing-only Wings profile.
+  --rebuild     Recreate containers and rebuild images before running reset steps.
+  --seed        Run seeders on backend/orchestrator/legacy in addition to migrate:fresh.
+  --with-wings  Also start Wings (testing profile) and clear Wings runtime state.
   --help        Show this help output.
 EOF
 }
@@ -38,7 +40,7 @@ while [ "$#" -gt 0 ]; do
       exit 0
       ;;
     *)
-      echo "Unknown option: $1"
+      echo "Unknown option: $1" >&2
       usage
       exit 1
       ;;
@@ -46,42 +48,72 @@ while [ "$#" -gt 0 ]; do
   shift
 done
 
-compose_cmd="docker compose"
-if [ "$with_wings" = "true" ]; then
-  compose_cmd="docker compose --profile testing"
-fi
+start_required_services() {
+  if [ "$rebuild" = "true" ]; then
+    echo "Rebuilding and recreating platform containers..."
+    if [ "$with_wings" = "true" ]; then
+      docker compose --profile testing down --remove-orphans
+      docker compose --profile testing up -d --build --force-recreate
+    else
+      docker compose down --remove-orphans
+      docker compose up -d --build --force-recreate
+    fi
+  else
+    echo "Restarting platform containers (no full rebuild)..."
+    if [ "$with_wings" = "true" ]; then
+      docker compose --profile testing stop
+      docker compose --profile testing up -d
+    else
+      docker compose stop
+      docker compose up -d
+    fi
+    if [ "$with_wings" = "true" ]; then
+      docker compose --profile testing up -d pterodactyl-wings
+    fi
+  fi
+}
 
-destroy_wings_containers() {
-  echo "Destroying any existing Wings containers..."
-  docker compose --profile testing stop pterodactyl-wings >/dev/null 2>&1 || true
-  docker compose --profile testing rm -f pterodactyl-wings >/dev/null 2>&1 || true
+wait_for_mysql_ready() {
+  attempts=0
+  until docker compose exec -T mysql mysqladmin ping -h 127.0.0.1 -uroot -psecret >/dev/null 2>&1; do
+    attempts=$((attempts + 1))
+    if [ "$attempts" -ge 30 ]; then
+      echo "MySQL did not become ready in time." >&2
+      exit 1
+    fi
+    sleep 2
+  done
+}
+
+wait_for_php_service_port() {
+  service="$1"
+  port="$2"
+  max_attempts="${3:-120}"
+  attempts=0
+  until docker compose exec -T "$service" php -r "exit(@fsockopen('127.0.0.1', $port) ? 0 : 1);" >/dev/null 2>&1; do
+    attempts=$((attempts + 1))
+    if [ "$attempts" -ge "$max_attempts" ]; then
+      echo "$service did not become ready in time (waited $((max_attempts * 2))s)." >&2
+      echo "Last 50 log lines from $service:" >&2
+      docker compose logs --tail=50 "$service" >&2 || true
+      exit 1
+    fi
+    sleep 2
+  done
 }
 
 destroy_wings_server_state() {
-  echo "Destroying Wings-managed server containers and runtime data..."
-
+  echo "Removing Wings-managed server runtime state..."
   managed_server_containers="$(docker ps -aq --filter label=Service=Pterodactyl --filter label=ContainerType=server_process 2>/dev/null || true)"
   if [ -n "$managed_server_containers" ]; then
     # shellcheck disable=SC2086
     docker rm -f $managed_server_containers >/dev/null 2>&1 || true
   fi
-
   rm -rf /tmp/pterodactyl/* /tmp/pterodactyl-logs/* /tmp/pterodactyl-tmp/* 2>/dev/null || true
 }
 
-destroy_wings_containers
-destroy_wings_server_state
-
-if [ "$rebuild" = "true" ]; then
-  $compose_cmd down --remove-orphans
-  $compose_cmd up -d --build --force-recreate
-else
-  $compose_cmd stop
-  $compose_cmd up -d
-fi
-
 ensure_pterodactyl_database() {
-  echo "Ensuring shared MySQL has the pterodactyl schema..."
+  echo "Ensuring shared MySQL has the pterodactyl schema and user..."
   docker compose exec -T mysql mysql -uroot -psecret <<'SQL'
 CREATE DATABASE IF NOT EXISTS `pterodactyl` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 CREATE USER IF NOT EXISTS 'pterodactyl'@'%' IDENTIFIED WITH mysql_native_password BY 'secret';
@@ -91,7 +123,21 @@ FLUSH PRIVILEGES;
 SQL
 }
 
-ensure_pterodactyl_database
+run_migrations() {
+  echo "Running migrate:fresh across platform databases..."
+  if [ "$seed" = "true" ]; then
+    docker compose exec -T backend php artisan migrate:fresh --seed --force --no-interaction
+    docker compose exec -T orchestrator php artisan migrate:fresh --seed --force --no-interaction
+    docker compose exec -T legacy php artisan migrate:fresh --seed --force --no-interaction
+  else
+    docker compose exec -T backend php artisan migrate:fresh --force --no-interaction
+    docker compose exec -T orchestrator php artisan migrate:fresh --force --no-interaction
+    docker compose exec -T legacy php artisan migrate:fresh --force --no-interaction
+  fi
+
+  # Keep panel reset deterministic; provisioning below repopulates required local data.
+  docker compose exec -T pterodactyl-panel php artisan migrate:fresh --force --no-interaction
+}
 
 pterodactyl_admin_email="${PTERODACTYL_ADMIN_EMAIL:-tom@intera.digital}"
 pterodactyl_admin_username="${PTERODACTYL_ADMIN_USERNAME:-tom}"
@@ -112,111 +158,40 @@ seed_pterodactyl_admin_user() {
 }
 
 generate_pterodactyl_application_api_key() {
-  echo "Generating Pterodactyl application API key for local orchestrator provisioning..." >&2
-
+  echo "Generating Pterodactyl application API key for local provisioning..." >&2
   docker compose exec -T \
     -e PTERODACTYL_PROVISION_ADMIN_EMAIL="$pterodactyl_admin_email" \
-    pterodactyl-panel php <<'PHP'
-<?php
-require '/app/vendor/autoload.php';
-
-$app = require '/app/bootstrap/app.php';
-$kernel = $app->make(Illuminate\Contracts\Console\Kernel::class);
-$kernel->bootstrap();
-
-$adminEmail = trim((string) getenv('PTERODACTYL_PROVISION_ADMIN_EMAIL'));
-if ($adminEmail === '') {
-    fwrite(STDERR, 'Missing panel admin email for API key generation.' . PHP_EOL);
-    exit(1);
+    pterodactyl-panel php /dev/stdin < "$SCRIPT_DIR/pterodactyl-generate-api-key.php"
 }
 
-$user = Pterodactyl\Models\User::query()
-    ->where('email', $adminEmail)
-    ->first();
+run_pterodactyl_provisioning() {
+  seed_pterodactyl_admin_user
+  pterodactyl_application_api_key="$(generate_pterodactyl_application_api_key)"
 
-if ($user === null) {
-    fwrite(STDERR, sprintf('Could not find panel admin user [%s] for API key generation.', $adminEmail) . PHP_EOL);
-    exit(1);
+  echo "Running local Pterodactyl/Wings provisioning..."
+  docker compose exec -T \
+    -e PTERODACTYL_BASE_URL="http://pterodactyl-panel" \
+    -e PTERODACTYL_APPLICATION_API_KEY="$pterodactyl_application_api_key" \
+    orchestrator php artisan test:provision-local --no-interaction
 }
 
-$memo = 'Local orchestrator provisioning key';
-$key = Pterodactyl\Models\ApiKey::query()
-    ->where('user_id', $user->id)
-    ->where('key_type', Pterodactyl\Models\ApiKey::TYPE_APPLICATION)
-    ->where('memo', $memo)
-    ->latest('id')
-    ->first();
+start_required_services
+wait_for_mysql_ready
+wait_for_php_service_port backend 8000
+wait_for_php_service_port orchestrator 8000
+wait_for_php_service_port legacy 8080
+wait_for_php_service_port pterodactyl-panel 80
 
-if ($key === null) {
-    $permissions = [
-        'r_servers' => 3,
-        'r_nodes' => 3,
-        'r_allocations' => 3,
-        'r_users' => 3,
-        'r_locations' => 3,
-        'r_nests' => 3,
-        'r_eggs' => 3,
-        'r_database_hosts' => 3,
-        'r_server_databases' => 3,
-    ];
-
-    $key = $app->make(Pterodactyl\Services\Api\KeyCreationService::class)
-        ->setKeyType(Pterodactyl\Models\ApiKey::TYPE_APPLICATION)
-        ->handle([
-            'memo' => $memo,
-            'user_id' => $user->id,
-            'allowed_ips' => [],
-        ], $permissions);
-}
-
-$token = $key->identifier . $app->make(Illuminate\Contracts\Encryption\Encrypter::class)->decrypt($key->token);
-fwrite(STDOUT, $token);
-PHP
-}
-
-if [ -x "$SCRIPT_DIR/event-bus-terraform.sh" ]; then
-  "$SCRIPT_DIR/event-bus-terraform.sh" local apply --auto-approve
+if [ "$with_wings" = "true" ]; then
+  destroy_wings_server_state
 fi
 
-wait_for_service() {
-  service="$1"
-  port="$2"
-  echo "Waiting for $service to become ready..."
-  elapsed=0
-  until docker compose exec -T "$service" php -r "exit(@fsockopen('127.0.0.1', $port) ? 0 : 1);" 2>/dev/null; do
-    elapsed=$((elapsed + 2))
-    if [ "$elapsed" -ge 10 ]; then
-      echo "$service did not become ready within 10 seconds – check 'docker compose logs $service'." >&2
-      exit 1
-    fi
-    sleep 2
-  done
-}
+ensure_pterodactyl_database
+run_migrations
+run_pterodactyl_provisioning
 
-wait_for_service backend 8000
-wait_for_service orchestrator 8000
-wait_for_service legacy 8080
-wait_for_service pterodactyl-panel 80
-
-if [ "$seed" = "true" ]; then
-  docker compose exec -T backend php artisan migrate:fresh --seed --force --no-interaction
-  docker compose exec -T orchestrator php artisan migrate --force --no-interaction
-  docker compose exec -T legacy php artisan migrate:fresh --seed --force --no-interaction
-  docker compose exec -T pterodactyl-panel php artisan migrate:fresh --seed --force --no-interaction
+if [ "$rebuild" = "true" ]; then
+  echo "Platform reset complete (with full container rebuild)."
 else
-  docker compose exec -T backend php artisan migrate:fresh --force --no-interaction
-  docker compose exec -T orchestrator php artisan migrate --force --no-interaction
-  docker compose exec -T legacy php artisan migrate:fresh --force --no-interaction
-  docker compose exec -T pterodactyl-panel php artisan migrate:fresh --force --no-interaction
+  echo "Platform reset complete (without full container rebuild)."
 fi
-
-seed_pterodactyl_admin_user
-
-pterodactyl_application_api_key="$(generate_pterodactyl_application_api_key)"
-
-docker compose exec -T \
-  -e PTERODACTYL_BASE_URL="http://pterodactyl-panel" \
-  -e PTERODACTYL_APPLICATION_API_KEY="$pterodactyl_application_api_key" \
-  orchestrator php artisan test:provision-local --no-interaction
-
-echo "Platform stack reset complete."
