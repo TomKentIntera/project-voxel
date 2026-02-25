@@ -129,4 +129,34 @@ class ProvisionLocalTestNodeCommandTest extends TestCase
                 && ($request->data()['ports'] ?? null) === $expectedAllocationPorts;
         });
     }
+
+    public function test_it_seeds_local_node_but_fails_when_panel_api_is_not_configured(): void
+    {
+        config()->set('services.pterodactyl', [
+            'base_url' => '',
+            'application_api_key' => '',
+            'client_api_key' => '',
+            'timeout' => 30,
+        ]);
+
+        Http::fake();
+
+        $this->artisan('test:provision-local')
+            ->expectsOutputToContain('Seeded local test node [node-1] in orchestrator database.')
+            ->expectsOutputToContain('Failed to synchronize local test node to Pterodactyl')
+            ->expectsOutputToContain('NODE_ID=node-1')
+            ->assertFailed();
+
+        $node = Node::query()->find('node-1');
+        $this->assertNotNull($node);
+        $this->assertSame('node-1', $node->name);
+        $this->assertSame(1, $node->ptero_location_id);
+        $this->assertNull($node->ptero_node_id);
+        $this->assertSame(Node::SYNC_STATUS_PENDING, $node->sync_status);
+        $this->assertNull($node->synced_at);
+        $this->assertIsString($node->token_hash);
+        $this->assertSame(64, strlen($node->token_hash));
+
+        Http::assertNothingSent();
+    }
 }

@@ -84,9 +84,10 @@ Reset the stack and rerun fresh migrations:
 ./scripts/platform-reset.sh
 ```
 
-`platform-reset.sh` now also runs `php artisan migrate:fresh` for the Pterodactyl panel
-and then executes `php artisan test:provision-local` in the orchestrator service to
-recreate a single local test node with default allocation ports.
+`platform-reset.sh` now also runs `php artisan migrate:fresh` for the Pterodactyl panel,
+generates an application API key for the seeded panel admin, and then executes
+`php artisan test:provision-local` in the orchestrator service to seed a single
+local test node and synchronize it to Pterodactyl (node + allocation creation).
 
 During reset, the script also:
 
