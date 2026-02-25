@@ -1,13 +1,17 @@
 <?php
 
+use App\Jobs\SyncNodeToPterodactylJob;
 use App\Jobs\UpdateLocationFreeSpaceJob;
 use App\Services\EventBus\ServerOrderedConsumer;
 use App\Services\Metrics\ResourceConsumptionCacheService;
+use App\Services\Pterodactyl\Services\PterodactylApiClient;
 use Illuminate\Foundation\Inspiring;
 use Illuminate\Support\Facades\Artisan;
+use Interadigital\CoreModels\Models\Node;
 use Interadigital\CoreModels\Models\TelemetryNode;
 use Interadigital\CoreModels\Models\TelemetryServer;
 use Symfony\Component\Console\Command\Command as ConsoleCommand;
+use Throwable;
 
 Artisan::command('inspire', function () {
     $this->comment(Inspiring::quote());
@@ -70,3 +74,121 @@ Artisan::command(
         return ConsoleCommand::SUCCESS;
     }
 )->purpose('Consume server ordered integration events from SQS');
+
+Artisan::command('test:provision-local', function (PterodactylApiClient $pterodactylApiClient): int {
+    $nodeId = 'node-1';
+    $nodeName = 'node-1';
+    $nodeRegion = 'eu.ger';
+    $allocationPorts = ['26625-26695'];
+    $locationShortCode = 'eu.ger';
+    $locationLongName = 'Local development';
+
+    $normalizePositiveInteger = static function (mixed $value): ?int {
+        if (is_int($value) && $value > 0) {
+            return $value;
+        }
+
+        if (is_string($value) && preg_match('/^\d+$/', trim($value)) === 1) {
+            $normalized = (int) trim($value);
+
+            return $normalized > 0 ? $normalized : null;
+        }
+
+        return null;
+    };
+
+    $baseUrl = trim((string) config('services.pterodactyl.base_url', ''));
+    $applicationApiKey = trim((string) config('services.pterodactyl.application_api_key', ''));
+    $syncToPterodactyl = $baseUrl !== '' && $applicationApiKey !== '';
+    $syncFailed = false;
+    $pteroLocationId = 1;
+
+    if ($syncToPterodactyl) {
+        try {
+            $existingLocation = collect($pterodactylApiClient->listLocations())
+                ->first(fn (array $location): bool => trim((string) ($location['short'] ?? '')) === $locationShortCode);
+
+            $resolvedLocationId = $normalizePositiveInteger(
+                is_array($existingLocation) ? ($existingLocation['id'] ?? null) : null
+            );
+
+            if ($resolvedLocationId === null) {
+                $createdLocation = $pterodactylApiClient->createLocation([
+                    'short' => $locationShortCode,
+                    'long' => $locationLongName,
+                ]);
+
+                $resolvedLocationId = $normalizePositiveInteger($createdLocation['id'] ?? null);
+            }
+
+            if ($resolvedLocationId !== null) {
+                $pteroLocationId = $resolvedLocationId;
+            } else {
+                $this->warn('Unable to resolve a Pterodactyl location ID. Falling back to location ID 1.');
+            }
+        } catch (Throwable $exception) {
+            $syncToPterodactyl = false;
+            $this->warn(sprintf(
+                'Failed to prepare Pterodactyl location (%s). Proceeding with orchestrator-only provisioning.',
+                trim($exception->getMessage()) !== '' ? trim($exception->getMessage()) : 'unknown error'
+            ));
+        }
+    }
+
+    $rawToken = Node::generateToken();
+
+    $node = Node::query()->updateOrCreate([
+        'id' => $nodeId,
+    ], [
+        'name' => $nodeName,
+        'region' => $nodeRegion,
+        'ip_address' => '127.0.0.1',
+        'ptero_location_id' => $pteroLocationId,
+        'fqdn' => 'pterodactyl-wings',
+        'scheme' => 'http',
+        'behind_proxy' => false,
+        'maintenance_mode' => false,
+        'memory' => 4096,
+        'memory_overallocate' => 10,
+        'disk' => 1000,
+        'disk_overallocate' => 100,
+        'upload_size' => 100,
+        'daemon_sftp' => 2022,
+        'daemon_listen' => 8080,
+        'allocation_ip' => '127.0.0.1',
+        'allocation_alias' => null,
+        'allocation_ports' => $allocationPorts,
+        'sync_status' => Node::SYNC_STATUS_PENDING,
+        'sync_error' => null,
+        'synced_at' => null,
+        'token_hash' => Node::hashToken($rawToken),
+        'last_active_at' => null,
+        'last_used_at' => null,
+    ]);
+
+    if ($syncToPterodactyl) {
+        try {
+            SyncNodeToPterodactylJob::dispatchSync($node->id);
+            $node->refresh();
+        } catch (Throwable $exception) {
+            $syncFailed = true;
+            $this->error(sprintf(
+                'Failed to synchronize local test node to Pterodactyl (%s).',
+                trim($exception->getMessage()) !== '' ? trim($exception->getMessage()) : 'unknown error'
+            ));
+        }
+    } else {
+        $this->warn('Skipping Pterodactyl sync because the Pterodactyl application API is not configured.');
+    }
+
+    $this->info(sprintf('Provisioned local test node [%s] in orchestrator.', $node->id));
+    $this->line(sprintf('NODE_ID=%s', $node->id));
+    $this->line(sprintf('NODE_TOKEN=%s', $rawToken));
+    $this->line(sprintf('ALLOCATION_PORTS=%s', implode(',', $allocationPorts)));
+
+    if ($node->ptero_node_id !== null) {
+        $this->line(sprintf('PTERODACTYL_NODE_ID=%d', (int) $node->ptero_node_id));
+    }
+
+    return $syncFailed ? ConsoleCommand::FAILURE : ConsoleCommand::SUCCESS;
+})->purpose('Provision a local test node with default allocations');
