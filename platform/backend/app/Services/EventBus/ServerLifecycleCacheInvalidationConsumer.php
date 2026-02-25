@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace App\Services\EventBus;
 
-use App\Services\LocationsCacheReader;
+use App\Jobs\ProcessServerLifecycleEventProcessor;
 use Illuminate\Http\Client\Response;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
@@ -15,18 +15,8 @@ use Throwable;
 
 class ServerLifecycleCacheInvalidationConsumer
 {
-    /**
-     * @var list<string>
-     */
-    private const INVALIDATING_EVENT_TYPES = [
-        'server.provisioned',
-        'server.provisioned.v1',
-        'server.migrated',
-        'server.migrated.v1',
-    ];
-
     public function __construct(
-        private readonly LocationsCacheReader $locationsCacheReader
+        private readonly ServerLifecycleEventProcessorMap $processorMap,
     ) {}
 
     public function consumeBatch(int $maxMessages = 10, int $waitTimeSeconds = 20): int
@@ -56,7 +46,8 @@ class ServerLifecycleCacheInvalidationConsumer
             }
 
             try {
-                $eventType = $this->extractEventType($body);
+                $eventPayload = $this->extractEventPayload($body);
+                $eventType = $this->extractEventType($eventPayload);
 
                 if ($eventType === null) {
                     Log::warning('Dropping malformed lifecycle event message.', [
@@ -67,8 +58,7 @@ class ServerLifecycleCacheInvalidationConsumer
                     continue;
                 }
 
-                if (in_array($eventType, self::INVALIDATING_EVENT_TYPES, true)) {
-                    $this->locationsCacheReader->forgetCachedPayload();
+                if (is_array($eventPayload) && $this->fanOutToEventConsumers($eventType, $eventPayload)) {
                     $processedCount++;
                 }
 
@@ -158,7 +148,10 @@ class ServerLifecycleCacheInvalidationConsumer
         }
     }
 
-    private function extractEventType(string $body): ?string
+    /**
+     * @return array<string, mixed>|null
+     */
+    private function extractEventPayload(string $body): ?array
     {
         $decoded = json_decode($body, true);
 
@@ -176,9 +169,38 @@ class ServerLifecycleCacheInvalidationConsumer
             $decoded = $innerDecoded;
         }
 
-        $eventType = trim((string) ($decoded['event_type'] ?? ''));
+        return $decoded;
+    }
+
+    /**
+     * @param array<string, mixed>|null $eventPayload
+     */
+    private function extractEventType(?array $eventPayload): ?string
+    {
+        if ($eventPayload === null) {
+            return null;
+        }
+
+        $eventType = trim((string) ($eventPayload['event_type'] ?? ''));
 
         return $eventType !== '' ? $eventType : null;
+    }
+
+    /**
+     * @param array<string, mixed> $eventPayload
+     */
+    private function fanOutToEventConsumers(string $eventType, array $eventPayload): bool
+    {
+        $processorKeys = $this->processorMap->processorKeysForEventType($eventType);
+        if ($processorKeys === []) {
+            return false;
+        }
+
+        foreach ($processorKeys as $processorKey) {
+            ProcessServerLifecycleEventProcessor::dispatchSync($processorKey, $eventPayload);
+        }
+
+        return true;
     }
 
     /**
