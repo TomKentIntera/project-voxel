@@ -57,7 +57,7 @@ Artisan::command(
             $processed = $consumer->consumeBatch($maxMessages, $waitSeconds);
 
             if ($processed > 0) {
-                $this->info(sprintf('Processed %d server ordered event(s).', $processed));
+                $this->info(sprintf('Processed %d server lifecycle event(s).', $processed));
             } elseif (! $once && $sleepSeconds > 0) {
                 sleep($sleepSeconds);
             }
@@ -69,4 +69,4 @@ Artisan::command(
 
         return ConsoleCommand::SUCCESS;
     }
-)->purpose('Consume server ordered integration events from SQS');
+)->purpose('Consume server lifecycle integration events from SQS');

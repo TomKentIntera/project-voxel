@@ -6,7 +6,6 @@ namespace Tests\Unit\Services\EventBus;
 
 use App\Services\EventBus\ServerLifecycleCacheInvalidationConsumer;
 use App\Services\EventBus\ServerLifecycleCacheInvalidationEventConsumer;
-use App\Services\EventBus\ServerProvisionedNotificationEventConsumer;
 use Illuminate\Support\Facades\Http;
 use Mockery;
 use Tests\TestCase;
@@ -37,15 +36,6 @@ class ServerLifecycleCacheInvalidationConsumerTest extends TestCase
             });
         $this->app->instance(ServerLifecycleCacheInvalidationEventConsumer::class, $cacheInvalidationConsumer);
 
-        $provisionedNotificationConsumer = Mockery::mock(ServerProvisionedNotificationEventConsumer::class);
-        $provisionedNotificationConsumer->shouldReceive('consume')
-            ->once()
-            ->withArgs(static function (array $payload): bool {
-                return ($payload['event_type'] ?? null) === 'server.provisioned'
-                    && ($payload['server_id'] ?? null) === 123;
-            });
-        $this->app->instance(ServerProvisionedNotificationEventConsumer::class, $provisionedNotificationConsumer);
-
         Http::fakeSequence()
             ->push($this->receiveMessageResponseXml('server.provisioned', ['server_id' => 123]), 200)
             ->push($this->deleteMessageResponseXml(), 200);
@@ -62,10 +52,6 @@ class ServerLifecycleCacheInvalidationConsumerTest extends TestCase
         $cacheInvalidationConsumer = Mockery::mock(ServerLifecycleCacheInvalidationEventConsumer::class);
         $cacheInvalidationConsumer->shouldNotReceive('consume');
         $this->app->instance(ServerLifecycleCacheInvalidationEventConsumer::class, $cacheInvalidationConsumer);
-
-        $provisionedNotificationConsumer = Mockery::mock(ServerProvisionedNotificationEventConsumer::class);
-        $provisionedNotificationConsumer->shouldNotReceive('consume');
-        $this->app->instance(ServerProvisionedNotificationEventConsumer::class, $provisionedNotificationConsumer);
 
         Http::fakeSequence()
             ->push($this->receiveMessageResponseXml('server.ordered.v1'), 200)
@@ -89,10 +75,6 @@ class ServerLifecycleCacheInvalidationConsumerTest extends TestCase
             });
         $this->app->instance(ServerLifecycleCacheInvalidationEventConsumer::class, $cacheInvalidationConsumer);
 
-        $provisionedNotificationConsumer = Mockery::mock(ServerProvisionedNotificationEventConsumer::class);
-        $provisionedNotificationConsumer->shouldNotReceive('consume');
-        $this->app->instance(ServerProvisionedNotificationEventConsumer::class, $provisionedNotificationConsumer);
-
         Http::fakeSequence()
             ->push($this->receiveMessageResponseXml('server.migrated', ['server_id' => 456]), 200)
             ->push($this->deleteMessageResponseXml(), 200);
@@ -109,10 +91,6 @@ class ServerLifecycleCacheInvalidationConsumerTest extends TestCase
         $cacheInvalidationConsumer = Mockery::mock(ServerLifecycleCacheInvalidationEventConsumer::class);
         $cacheInvalidationConsumer->shouldNotReceive('consume');
         $this->app->instance(ServerLifecycleCacheInvalidationEventConsumer::class, $cacheInvalidationConsumer);
-
-        $provisionedNotificationConsumer = Mockery::mock(ServerProvisionedNotificationEventConsumer::class);
-        $provisionedNotificationConsumer->shouldNotReceive('consume');
-        $this->app->instance(ServerProvisionedNotificationEventConsumer::class, $provisionedNotificationConsumer);
 
         Http::fakeSequence()
             ->push($this->nonExistentQueueErrorXml(), 400);

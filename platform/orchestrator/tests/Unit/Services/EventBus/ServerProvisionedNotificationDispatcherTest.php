@@ -19,7 +19,7 @@ class ServerProvisionedNotificationDispatcherTest extends TestCase
 {
     use RefreshDatabase;
 
-    public function test_it_sends_user_email_and_queues_slack_notification_for_provisioned_servers(): void
+    public function test_it_sends_user_email_and_queues_slack_notification(): void
     {
         config()->set('slack.channels.servers', 'CSERVERS');
         config()->set('slack.channels.orders', 'CORDERS');
@@ -37,12 +37,10 @@ class ServerProvisionedNotificationDispatcherTest extends TestCase
             'config' => json_encode(['name' => 'Skyblock Realm']),
         ]);
 
-        $dispatcher = app(ServerProvisionedNotificationDispatcher::class);
+        $server->load('user');
 
-        $dispatcher->dispatch([
-            'event_type' => 'server.provisioned',
-            'server_id' => $server->id,
-        ]);
+        $dispatcher = app(ServerProvisionedNotificationDispatcher::class);
+        $dispatcher->dispatch($server);
 
         Mail::assertSent(
             ServerProvisionedMail::class,
@@ -68,21 +66,7 @@ class ServerProvisionedNotificationDispatcherTest extends TestCase
         );
     }
 
-    public function test_it_skips_notifications_when_event_payload_does_not_include_server_id(): void
-    {
-        Mail::fake();
-        Queue::fake();
-
-        $dispatcher = app(ServerProvisionedNotificationDispatcher::class);
-        $dispatcher->dispatch([
-            'event_type' => 'server.provisioned',
-        ]);
-
-        Mail::assertNothingSent();
-        Queue::assertNothingPushed();
-    }
-
-    public function test_it_still_sends_email_when_slack_channel_is_not_configured(): void
+    public function test_it_skips_slack_when_no_channel_is_configured(): void
     {
         config()->set('slack.channels.servers', '');
         config()->set('slack.channels.orders', '');
@@ -100,11 +84,10 @@ class ServerProvisionedNotificationDispatcherTest extends TestCase
             'config' => json_encode(['name' => 'Skyblock Realm']),
         ]);
 
+        $server->load('user');
+
         $dispatcher = app(ServerProvisionedNotificationDispatcher::class);
-        $dispatcher->dispatch([
-            'event_type' => 'server.provisioned',
-            'server_id' => $server->id,
-        ]);
+        $dispatcher->dispatch($server);
 
         Mail::assertSent(ServerProvisionedMail::class);
         Queue::assertNothingPushed();

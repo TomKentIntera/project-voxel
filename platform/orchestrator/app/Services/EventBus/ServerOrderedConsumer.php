@@ -8,17 +8,35 @@ use Illuminate\Http\Client\Response;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use Interadigital\CoreEvents\Aws\SignatureV4;
-use Interadigital\CoreEvents\Events\ServerOrdered;
-use Interadigital\CoreModels\Enums\ServerEventType;
-use Interadigital\CoreModels\Enums\ServerStatus;
-use Interadigital\CoreModels\Models\Server;
-use Interadigital\CoreModels\Models\ServerEvent;
 use RuntimeException;
 use SimpleXMLElement;
 use Throwable;
 
 class ServerOrderedConsumer
 {
+    private const SERVER_ORDERED_EVENT_CONSUMER = 'server_ordered_event_consumer';
+    private const SERVER_PROVISIONED_EVENT_CONSUMER = 'server_provisioned_event_consumer';
+
+    /**
+     * @var array<string, list<string>>
+     */
+    private const EVENT_TYPE_TO_CONSUMERS = [
+        'server.ordered.v1' => [
+            self::SERVER_ORDERED_EVENT_CONSUMER,
+        ],
+        'server.provisioned' => [
+            self::SERVER_PROVISIONED_EVENT_CONSUMER,
+        ],
+        'server.provisioned.v1' => [
+            self::SERVER_PROVISIONED_EVENT_CONSUMER,
+        ],
+    ];
+
+    public function __construct(
+        private readonly ServerOrderedLifecycleEventConsumer $serverOrderedLifecycleEventConsumer,
+        private readonly ServerProvisionedLifecycleEventConsumer $serverProvisionedLifecycleEventConsumer,
+    ) {}
+
     public function consumeBatch(int $maxMessages = 10, int $waitTimeSeconds = 20): int
     {
         $queueUrl = $this->queueUrl();
@@ -46,9 +64,10 @@ class ServerOrderedConsumer
             }
 
             try {
-                $event = $this->extractEvent($body);
+                $eventPayload = $this->extractEventPayload($body);
+                $eventType = $this->extractEventType($eventPayload);
 
-                if ($event === null) {
+                if ($eventType === null) {
                     Log::warning('Dropping malformed server ordered message.', [
                         'message_id' => $message['message_id'] ?? null,
                     ]);
@@ -57,9 +76,11 @@ class ServerOrderedConsumer
                     continue;
                 }
 
-                $this->handleServerOrdered($event);
+                if (is_array($eventPayload) && $this->fanOutToEventConsumers($eventType, $eventPayload)) {
+                    $processedCount++;
+                }
+
                 $this->deleteMessage($queueUrl, $receiptHandle);
-                $processedCount++;
             } catch (Throwable $exception) {
                 Log::error('Failed to process server ordered message.', [
                     'message_id' => $message['message_id'] ?? null,
@@ -135,51 +156,10 @@ class ServerOrderedConsumer
         }
     }
 
-    private function handleServerOrdered(ServerOrdered $event): void
-    {
-        $server = Server::query()
-            ->where('id', $event->serverId)
-            ->where('uuid', $event->serverUuid)
-            ->first();
-
-        if ($server === null) {
-            Log::warning('Received server ordered event for unknown server.', [
-                'server_id' => $event->serverId,
-                'server_uuid' => $event->serverUuid,
-                'event_id' => $event->eventId,
-            ]);
-
-            return;
-        }
-
-        $alreadyProcessed = $server->events()
-            ->where('type', ServerEventType::SERVER_PROVISIONING_STARTED->value)
-            ->get()
-            ->contains(fn (ServerEvent $entry): bool => ($entry->meta['event_id'] ?? null) === $event->eventId);
-
-        if ($alreadyProcessed) {
-            return;
-        }
-
-        if ($server->status !== ServerStatus::PROVISIONING->value) {
-            $server->status = ServerStatus::PROVISIONING->value;
-            $server->save();
-        }
-
-        ServerEvent::query()->create([
-            'server_id' => $server->id,
-            'actor_id' => null,
-            'type' => ServerEventType::SERVER_PROVISIONING_STARTED->value,
-            'meta' => [
-                'event_id' => $event->eventId,
-                'event_type' => ServerOrdered::eventType(),
-                'correlation_id' => $event->correlationId,
-                'stripe_subscription_id' => $event->stripeSubscriptionId,
-            ],
-        ]);
-    }
-
-    private function extractEvent(string $body): ?ServerOrdered
+    /**
+     * @return array<string, mixed>|null
+     */
+    private function extractEventPayload(string $body): ?array
     {
         $decoded = json_decode($body, true);
 
@@ -197,11 +177,50 @@ class ServerOrderedConsumer
             $decoded = $innerDecoded;
         }
 
-        try {
-            return ServerOrdered::fromArray($decoded);
-        } catch (Throwable) {
+        return $decoded;
+    }
+
+    /**
+     * @param array<string, mixed>|null $eventPayload
+     */
+    private function extractEventType(?array $eventPayload): ?string
+    {
+        if ($eventPayload === null) {
             return null;
         }
+
+        $eventType = trim((string) ($eventPayload['event_type'] ?? ''));
+
+        return $eventType !== '' ? $eventType : null;
+    }
+
+    /**
+     * @param array<string, mixed> $eventPayload
+     */
+    private function fanOutToEventConsumers(string $eventType, array $eventPayload): bool
+    {
+        $consumerKeys = self::EVENT_TYPE_TO_CONSUMERS[$eventType] ?? [];
+        if ($consumerKeys === []) {
+            return false;
+        }
+
+        foreach ($consumerKeys as $consumerKey) {
+            $this->resolveConsumer($consumerKey)->consume($eventPayload);
+        }
+
+        return true;
+    }
+
+    private function resolveConsumer(string $consumerKey): ServerLifecycleEventConsumer
+    {
+        return match ($consumerKey) {
+            self::SERVER_ORDERED_EVENT_CONSUMER => $this->serverOrderedLifecycleEventConsumer,
+            self::SERVER_PROVISIONED_EVENT_CONSUMER => $this->serverProvisionedLifecycleEventConsumer,
+            default => throw new RuntimeException(sprintf(
+                'Unsupported server ordered consumer key "%s".',
+                $consumerKey,
+            )),
+        };
     }
 
     /**

@@ -14,88 +14,45 @@ use Throwable;
 
 final class ServerProvisionedNotificationDispatcher
 {
-    /**
-     * @param array<string, mixed> $eventPayload
-     */
-    public function dispatch(array $eventPayload): void
+    public function dispatch(Server $server): void
     {
-        $serverId = $this->extractServerId($eventPayload);
-        if ($serverId === null) {
-            Log::warning('Skipping server provisioned notifications: missing server_id.', [
-                'event_payload' => $eventPayload,
-            ]);
-
-            return;
-        }
-
-        $server = Server::query()->with('user')->find($serverId);
-        if (! ($server instanceof Server)) {
-            Log::warning('Skipping server provisioned notifications: server not found.', [
-                'server_id' => $serverId,
-            ]);
-
-            return;
-        }
+        $serverId = (int) $server->id;
+        $serverUuid = $this->resolveServerUuid($server);
+        $serverName = $this->resolveServerName($server);
 
         $serverOwner = $server->user;
         $userId = (int) $server->user_id;
-        $userEmail = '';
+        $userEmail = 'unknown';
 
         if ($serverOwner !== null) {
             $userId = (int) $serverOwner->id;
-            $userEmail = trim((string) $serverOwner->email);
-        } else {
-            Log::warning('Skipping server provisioned notifications: server owner missing.', [
-                'server_id' => (int) $server->id,
-            ]);
+            $resolvedEmail = trim((string) $serverOwner->email);
+            if ($resolvedEmail !== '') {
+                $userEmail = $resolvedEmail;
+            }
         }
 
-        if ($userEmail === '') {
-            Log::warning('Skipping server provisioned notifications: owner email missing.', [
-                'server_id' => (int) $server->id,
+        if ($userEmail !== 'unknown') {
+            $this->sendUserEmail(
+                email: $userEmail,
+                serverId: $serverId,
+                serverUuid: $serverUuid,
+                serverName: $serverName,
+            );
+        } else {
+            Log::warning('Skipping server provisioned user email: owner email missing.', [
+                'server_id' => $serverId,
                 'user_id' => $userId,
             ]);
         }
 
-        $serverUuid = $this->resolveServerUuid($server);
-        $serverName = $this->resolveServerName($server);
-
-        if ($userEmail !== '') {
-            $this->sendUserEmail(
-                email: $userEmail,
-                serverId: (int) $server->id,
-                serverUuid: $serverUuid,
-                serverName: $serverName,
-            );
-        }
-
         $this->dispatchSlackNotification(
-            serverId: (int) $server->id,
+            serverId: $serverId,
             serverUuid: $serverUuid,
             userId: $userId,
-            userEmail: $userEmail !== '' ? $userEmail : 'unknown',
+            userEmail: $userEmail,
             serverName: $serverName,
         );
-    }
-
-    /**
-     * @param array<string, mixed> $eventPayload
-     */
-    private function extractServerId(array $eventPayload): ?int
-    {
-        $serverId = $eventPayload['server_id'] ?? null;
-
-        if (is_int($serverId) && $serverId > 0) {
-            return $serverId;
-        }
-
-        if (is_string($serverId) && ctype_digit($serverId)) {
-            $normalized = (int) $serverId;
-
-            return $normalized > 0 ? $normalized : null;
-        }
-
-        return null;
     }
 
     private function resolveServerUuid(Server $server): string

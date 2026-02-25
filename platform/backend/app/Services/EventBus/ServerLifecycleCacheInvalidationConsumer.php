@@ -15,7 +15,6 @@ use Throwable;
 class ServerLifecycleCacheInvalidationConsumer
 {
     private const CACHE_INVALIDATION_CONSUMER = 'cache_invalidation';
-    private const PROVISIONED_NOTIFICATION_CONSUMER = 'provisioned_notification';
 
     /**
      * @var array<string, list<string>>
@@ -23,11 +22,9 @@ class ServerLifecycleCacheInvalidationConsumer
     private const EVENT_TYPE_TO_CONSUMERS = [
         'server.provisioned' => [
             self::CACHE_INVALIDATION_CONSUMER,
-            self::PROVISIONED_NOTIFICATION_CONSUMER,
         ],
         'server.provisioned.v1' => [
             self::CACHE_INVALIDATION_CONSUMER,
-            self::PROVISIONED_NOTIFICATION_CONSUMER,
         ],
         'server.migrated' => [
             self::CACHE_INVALIDATION_CONSUMER,
@@ -39,7 +36,6 @@ class ServerLifecycleCacheInvalidationConsumer
 
     public function __construct(
         private readonly ServerLifecycleCacheInvalidationEventConsumer $serverLifecycleCacheInvalidationEventConsumer,
-        private readonly ServerProvisionedNotificationEventConsumer $serverProvisionedNotificationEventConsumer,
     ) {}
 
     public function consumeBatch(int $maxMessages = 10, int $waitTimeSeconds = 20): int
@@ -230,7 +226,6 @@ class ServerLifecycleCacheInvalidationConsumer
     {
         return match ($consumerKey) {
             self::CACHE_INVALIDATION_CONSUMER => $this->serverLifecycleCacheInvalidationEventConsumer,
-            self::PROVISIONED_NOTIFICATION_CONSUMER => $this->serverProvisionedNotificationEventConsumer,
             default => throw new RuntimeException(sprintf(
                 'Unsupported server lifecycle consumer key "%s".',
                 $consumerKey,
