@@ -85,7 +85,12 @@ laravel-project/
 - Favor dependency injection and service containers
 - Ensure all services maintain high unit test coverage
 - Make use of docker containers where posible for testing on windows & macos (silicon)
-- For event queues, default to a single queue entrypoint that parses payloads, maps by `event_type`, and fans out to one or more processors (prefer processor jobs for fan-out).
+- For event queues, use this architecture by default:
+  - A single queue entrypoint per queue (consumer command/service) handles receive/decode/ack only; do not embed business logic there.
+  - A dedicated mapper class must map `event_type` to one or more processor keys.
+  - Fan-out must dispatch one processor job per processor key asynchronously (`dispatch`), passing at minimum `processorKey` and the parsed event payload.
+  - The processor job must resolve the processor key via a resolver class, then invoke the matched processor implementation.
+  - Processor implementations should be idempotent (for example keyed by `event_id` + processor key) because retries and duplicate deliveries are expected.
 - NEVER modify a migration. Migrations are considered immutable, and a subsequent migration should be created to alter the table.
 - Place each enum in its own file named `{Thing}Enum.php` within the appropriate `App/Services/...` subdirectory (for example, `App/Services/Posts/Media/TypeEnum.php`).
 - Run `php artisan test` locally and ensure it passes before opening a PR with backend changes.
