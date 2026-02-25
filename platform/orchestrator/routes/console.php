@@ -10,6 +10,7 @@ use Illuminate\Support\Facades\Artisan;
 use Interadigital\CoreModels\Models\Node;
 use Interadigital\CoreModels\Models\TelemetryNode;
 use Interadigital\CoreModels\Models\TelemetryServer;
+use RuntimeException;
 use Symfony\Component\Console\Command\Command as ConsoleCommand;
 use Throwable;
 
@@ -82,6 +83,7 @@ Artisan::command('test:provision-local', function (PterodactylApiClient $pteroda
     $allocationPorts = ['26625-26695'];
     $locationShortCode = 'eu.ger';
     $locationLongName = 'Local development';
+    $defaultPteroLocationId = 1;
 
     $normalizePositiveInteger = static function (mixed $value): ?int {
         if (is_int($value) && $value > 0) {
@@ -99,41 +101,7 @@ Artisan::command('test:provision-local', function (PterodactylApiClient $pteroda
 
     $baseUrl = trim((string) config('services.pterodactyl.base_url', ''));
     $applicationApiKey = trim((string) config('services.pterodactyl.application_api_key', ''));
-    $syncToPterodactyl = $baseUrl !== '' && $applicationApiKey !== '';
     $syncFailed = false;
-    $pteroLocationId = 1;
-
-    if ($syncToPterodactyl) {
-        try {
-            $existingLocation = collect($pterodactylApiClient->listLocations())
-                ->first(fn (array $location): bool => trim((string) ($location['short'] ?? '')) === $locationShortCode);
-
-            $resolvedLocationId = $normalizePositiveInteger(
-                is_array($existingLocation) ? ($existingLocation['id'] ?? null) : null
-            );
-
-            if ($resolvedLocationId === null) {
-                $createdLocation = $pterodactylApiClient->createLocation([
-                    'short' => $locationShortCode,
-                    'long' => $locationLongName,
-                ]);
-
-                $resolvedLocationId = $normalizePositiveInteger($createdLocation['id'] ?? null);
-            }
-
-            if ($resolvedLocationId !== null) {
-                $pteroLocationId = $resolvedLocationId;
-            } else {
-                $this->warn('Unable to resolve a Pterodactyl location ID. Falling back to location ID 1.');
-            }
-        } catch (Throwable $exception) {
-            $syncToPterodactyl = false;
-            $this->warn(sprintf(
-                'Failed to prepare Pterodactyl location (%s). Proceeding with orchestrator-only provisioning.',
-                trim($exception->getMessage()) !== '' ? trim($exception->getMessage()) : 'unknown error'
-            ));
-        }
-    }
 
     $rawToken = Node::generateToken();
 
@@ -143,7 +111,7 @@ Artisan::command('test:provision-local', function (PterodactylApiClient $pteroda
         'name' => $nodeName,
         'region' => $nodeRegion,
         'ip_address' => '127.0.0.1',
-        'ptero_location_id' => $pteroLocationId,
+        'ptero_location_id' => $defaultPteroLocationId,
         'fqdn' => 'pterodactyl-wings',
         'scheme' => 'http',
         'behind_proxy' => false,
@@ -166,19 +134,49 @@ Artisan::command('test:provision-local', function (PterodactylApiClient $pteroda
         'last_used_at' => null,
     ]);
 
-    if ($syncToPterodactyl) {
-        try {
-            SyncNodeToPterodactylJob::dispatchSync($node->id);
-            $node->refresh();
-        } catch (Throwable $exception) {
-            $syncFailed = true;
-            $this->error(sprintf(
-                'Failed to synchronize local test node to Pterodactyl (%s).',
-                trim($exception->getMessage()) !== '' ? trim($exception->getMessage()) : 'unknown error'
-            ));
+    $this->info(sprintf('Seeded local test node [%s] in orchestrator database.', $node->id));
+
+    try {
+        if ($baseUrl === '' || $applicationApiKey === '') {
+            throw new RuntimeException(
+                'Pterodactyl base URL and application API key must be configured to sync the local test node.'
+            );
         }
-    } else {
-        $this->warn('Skipping Pterodactyl sync because the Pterodactyl application API is not configured.');
+
+        $existingLocation = collect($pterodactylApiClient->listLocations())
+            ->first(fn (array $location): bool => trim((string) ($location['short'] ?? '')) === $locationShortCode);
+
+        $resolvedLocationId = $normalizePositiveInteger(
+            is_array($existingLocation) ? ($existingLocation['id'] ?? null) : null
+        );
+
+        if ($resolvedLocationId === null) {
+            $createdLocation = $pterodactylApiClient->createLocation([
+                'short' => $locationShortCode,
+                'long' => $locationLongName,
+            ]);
+
+            $resolvedLocationId = $normalizePositiveInteger($createdLocation['id'] ?? null);
+        }
+
+        if ($resolvedLocationId === null) {
+            throw new RuntimeException('Unable to resolve a valid Pterodactyl location ID for local provisioning.');
+        }
+
+        if ((int) $node->ptero_location_id !== $resolvedLocationId) {
+            $node->forceFill([
+                'ptero_location_id' => $resolvedLocationId,
+            ])->save();
+        }
+
+        SyncNodeToPterodactylJob::dispatchSync($node->id);
+        $node->refresh();
+    } catch (Throwable $exception) {
+        $syncFailed = true;
+        $this->error(sprintf(
+            'Failed to synchronize local test node to Pterodactyl (%s).',
+            trim($exception->getMessage()) !== '' ? trim($exception->getMessage()) : 'unknown error'
+        ));
     }
 
     $this->info(sprintf('Provisioned local test node [%s] in orchestrator.', $node->id));
