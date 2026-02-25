@@ -25,8 +25,17 @@ class ServerLifecycleCacheInvalidationConsumer
         'server.migrated.v1',
     ];
 
+    /**
+     * @var list<string>
+     */
+    private const PROVISIONED_EVENT_TYPES = [
+        'server.provisioned',
+        'server.provisioned.v1',
+    ];
+
     public function __construct(
-        private readonly LocationsCacheReader $locationsCacheReader
+        private readonly LocationsCacheReader $locationsCacheReader,
+        private readonly ServerProvisionedNotificationDispatcher $serverProvisionedNotificationDispatcher,
     ) {}
 
     public function consumeBatch(int $maxMessages = 10, int $waitTimeSeconds = 20): int
@@ -56,7 +65,8 @@ class ServerLifecycleCacheInvalidationConsumer
             }
 
             try {
-                $eventType = $this->extractEventType($body);
+                $eventPayload = $this->extractEventPayload($body);
+                $eventType = $this->extractEventType($eventPayload);
 
                 if ($eventType === null) {
                     Log::warning('Dropping malformed lifecycle event message.', [
@@ -70,6 +80,13 @@ class ServerLifecycleCacheInvalidationConsumer
                 if (in_array($eventType, self::INVALIDATING_EVENT_TYPES, true)) {
                     $this->locationsCacheReader->forgetCachedPayload();
                     $processedCount++;
+
+                    if (
+                        is_array($eventPayload)
+                        && in_array($eventType, self::PROVISIONED_EVENT_TYPES, true)
+                    ) {
+                        $this->serverProvisionedNotificationDispatcher->dispatch($eventPayload);
+                    }
                 }
 
                 $this->deleteMessage($queueUrl, $receiptHandle);
@@ -158,7 +175,10 @@ class ServerLifecycleCacheInvalidationConsumer
         }
     }
 
-    private function extractEventType(string $body): ?string
+    /**
+     * @return array<string, mixed>|null
+     */
+    private function extractEventPayload(string $body): ?array
     {
         $decoded = json_decode($body, true);
 
@@ -176,7 +196,19 @@ class ServerLifecycleCacheInvalidationConsumer
             $decoded = $innerDecoded;
         }
 
-        $eventType = trim((string) ($decoded['event_type'] ?? ''));
+        return $decoded;
+    }
+
+    /**
+     * @param array<string, mixed>|null $eventPayload
+     */
+    private function extractEventType(?array $eventPayload): ?string
+    {
+        if ($eventPayload === null) {
+            return null;
+        }
+
+        $eventType = trim((string) ($eventPayload['event_type'] ?? ''));
 
         return $eventType !== '' ? $eventType : null;
     }
