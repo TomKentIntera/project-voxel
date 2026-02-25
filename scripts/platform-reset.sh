@@ -51,6 +51,14 @@ if [ "$with_wings" = "true" ]; then
   compose_cmd="docker compose --profile testing"
 fi
 
+destroy_wings_containers() {
+  echo "Destroying any existing Wings containers..."
+  docker compose --profile testing stop pterodactyl-wings >/dev/null 2>&1 || true
+  docker compose --profile testing rm -f pterodactyl-wings >/dev/null 2>&1 || true
+}
+
+destroy_wings_containers
+
 if [ "$rebuild" = "true" ]; then
   $compose_cmd down --remove-orphans
   $compose_cmd up -d --build --force-recreate
