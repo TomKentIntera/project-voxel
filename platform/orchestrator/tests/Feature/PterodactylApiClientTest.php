@@ -210,6 +210,35 @@ class PterodactylApiClientTest extends TestCase
         });
     }
 
+    public function test_create_location_posts_payload_and_returns_attributes(): void
+    {
+        Http::fake([
+            'https://panel.example.com/api/application/locations' => Http::response([
+                'object' => 'location',
+                'attributes' => [
+                    'id' => 55,
+                    'short' => 'eu.ger',
+                ],
+            ], 201),
+        ]);
+
+        $client = app(PterodactylApiClient::class);
+        $location = $client->createLocation([
+            'short' => 'eu.ger',
+            'long' => 'Local development',
+        ]);
+
+        $this->assertSame(55, $location['id']);
+        $this->assertSame('eu.ger', $location['short']);
+
+        Http::assertSent(function (Request $request): bool {
+            return $request->method() === 'POST'
+                && $request->url() === 'https://panel.example.com/api/application/locations'
+                && ($request->data()['short'] ?? null) === 'eu.ger'
+                && ($request->data()['long'] ?? null) === 'Local development';
+        });
+    }
+
     public function test_find_user_by_external_id_uses_filter_query_parameter(): void
     {
         Http::fake([

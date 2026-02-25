@@ -34,6 +34,15 @@ class PterodactylApiClient
     }
 
     /**
+     * @param  array<string, mixed>  $payload
+     * @return array<string, mixed>
+     */
+    public function createLocation(array $payload): array
+    {
+        return $this->unwrapAttributes($this->applicationSend('POST', '/locations', payload: $payload));
+    }
+
+    /**
      * @return list<array<string, mixed>>
      */
     public function listNodes(array $includes = []): array
