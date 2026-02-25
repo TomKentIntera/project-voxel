@@ -18,6 +18,13 @@ class NodeApiTest extends TestCase
 
     public function test_admin_can_create_node_and_receive_one_time_token(): void
     {
+        config()->set('services.pterodactyl', [
+            'base_url' => 'https://panel.example.test',
+            'application_api_key' => 'test-app-api-key',
+            'client_api_key' => 'test-client-api-key',
+            'timeout' => 15,
+        ]);
+
         $token = $this->authenticateAdmin();
         Queue::fake();
 

@@ -146,7 +146,9 @@ class NodeController extends Controller
             'token_hash' => Node::hashToken($rawToken),
         ]);
 
-        SyncNodeToPterodactylJob::dispatch($node->id);
+        if ($this->isPterodactylNodeSyncConfigured()) {
+            SyncNodeToPterodactylJob::dispatch($node->id);
+        }
 
         return response()->json([
             'data' => [
@@ -211,6 +213,14 @@ class NodeController extends Controller
             'created_at' => $node->created_at?->toIso8601String(),
             'updated_at' => $node->updated_at?->toIso8601String(),
         ];
+    }
+
+    private function isPterodactylNodeSyncConfigured(): bool
+    {
+        $baseUrl = trim((string) config('services.pterodactyl.base_url', ''));
+        $applicationApiKey = trim((string) config('services.pterodactyl.application_api_key', ''));
+
+        return $baseUrl !== '' && $applicationApiKey !== '';
     }
 
     /**
