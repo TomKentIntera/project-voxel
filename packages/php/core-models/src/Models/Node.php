@@ -14,6 +14,14 @@ class Node extends Model
 {
     use HasFactory;
 
+    public const SYNC_STATUS_PENDING = 'pending';
+
+    public const SYNC_STATUS_SYNCING = 'syncing';
+
+    public const SYNC_STATUS_SYNCED = 'synced';
+
+    public const SYNC_STATUS_FAILED = 'failed';
+
     /**
      * @var string
      */
@@ -39,9 +47,28 @@ class Node extends Model
      */
     protected $fillable = [
         'id',
+        'ptero_node_id',
         'name',
         'region',
+        'ptero_location_id',
         'ip_address',
+        'fqdn',
+        'scheme',
+        'behind_proxy',
+        'maintenance_mode',
+        'memory',
+        'memory_overallocate',
+        'disk',
+        'disk_overallocate',
+        'upload_size',
+        'daemon_sftp',
+        'daemon_listen',
+        'allocation_ip',
+        'allocation_alias',
+        'allocation_ports',
+        'sync_status',
+        'sync_error',
+        'synced_at',
         'token_hash',
         'last_active_at',
         'last_used_at',
@@ -60,6 +87,19 @@ class Node extends Model
     protected function casts(): array
     {
         return [
+            'ptero_node_id' => 'integer',
+            'ptero_location_id' => 'integer',
+            'behind_proxy' => 'boolean',
+            'maintenance_mode' => 'boolean',
+            'memory' => 'integer',
+            'memory_overallocate' => 'integer',
+            'disk' => 'integer',
+            'disk_overallocate' => 'integer',
+            'upload_size' => 'integer',
+            'daemon_sftp' => 'integer',
+            'daemon_listen' => 'integer',
+            'allocation_ports' => 'array',
+            'synced_at' => 'datetime',
             'last_active_at' => 'datetime',
             'last_used_at' => 'datetime',
         ];

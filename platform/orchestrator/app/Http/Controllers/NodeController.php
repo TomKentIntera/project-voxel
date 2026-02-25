@@ -4,17 +4,22 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers;
 
+use App\Jobs\SyncNodeToPterodactylJob;
+use App\Services\Pterodactyl\Services\PterodactylApiClient;
+use App\Services\Pterodactyl\Support\AllocationPortNormalizer;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\ValidationException;
 use Interadigital\CoreModels\Models\Node;
 use Interadigital\CoreModels\Models\Server;
 use Interadigital\CoreModels\Models\TelemetryNode;
 use Interadigital\CoreModels\Models\TelemetryServer;
 use Interadigital\CoreModels\Models\User;
 use Symfony\Component\HttpFoundation\Response;
+use Throwable;
 
 class NodeController extends Controller
 {
@@ -49,7 +54,7 @@ class NodeController extends Controller
         ]);
     }
 
-    public function show(string $id): JsonResponse
+    public function show(PterodactylApiClient $pterodactylApiClient, string $id): JsonResponse
     {
         $node = Node::find($id);
 
@@ -64,6 +69,7 @@ class NodeController extends Controller
             ->where('node_id', $id)
             ->orderByDesc('created_at')
             ->first();
+        $allocationDetails = $this->resolveNodeAllocations($node, $pterodactylApiClient);
 
         return response()->json([
             'data' => [
@@ -71,6 +77,11 @@ class NodeController extends Controller
                 'performance_last_24h' => $this->buildPerformanceWindow($id, $latestTelemetry),
                 'servers' => $servers,
                 'servers_count' => count($servers),
+                'allocations' => $allocationDetails['items'],
+                'allocations_count' => $allocationDetails['counts']['total'],
+                'assigned_allocations_count' => $allocationDetails['counts']['assigned'],
+                'unassigned_allocations_count' => $allocationDetails['counts']['unassigned'],
+                'allocations_error' => $allocationDetails['error'],
             ],
         ]);
     }
@@ -82,7 +93,38 @@ class NodeController extends Controller
             'name' => ['required', 'string', 'max:255', 'unique:nodes,name'],
             'region' => ['required', 'string', 'max:255'],
             'ip_address' => ['required', 'ip'],
+            'ptero_location_id' => ['required', 'integer', 'min:1'],
+            'fqdn' => ['required', 'string', 'max:255'],
+            'scheme' => ['required', 'string', 'in:http,https'],
+            'behind_proxy' => ['required', 'boolean'],
+            'maintenance_mode' => ['sometimes', 'boolean'],
+            'memory' => ['required', 'integer', 'min:1'],
+            'memory_overallocate' => ['sometimes', 'integer', 'min:-1'],
+            'disk' => ['required', 'integer', 'min:1'],
+            'disk_overallocate' => ['sometimes', 'integer', 'min:-1'],
+            'upload_size' => ['required', 'integer', 'min:1'],
+            'daemon_sftp' => ['required', 'integer', 'between:1,65535'],
+            'daemon_listen' => ['required', 'integer', 'between:1,65535'],
+            'allocation_ip' => ['nullable', 'ip'],
+            'allocation_alias' => ['nullable', 'string', 'max:255'],
+            'allocation_ports' => ['required', 'array', 'min:1'],
         ]);
+
+        try {
+            $allocationPorts = AllocationPortNormalizer::normalizeForStorage(
+                (array) ($validated['allocation_ports'] ?? [])
+            );
+        } catch (\InvalidArgumentException $exception) {
+            throw ValidationException::withMessages([
+                'allocation_ports' => [$exception->getMessage()],
+            ]);
+        }
+
+        if ($allocationPorts === []) {
+            throw ValidationException::withMessages([
+                'allocation_ports' => ['At least one allocation port is required.'],
+            ]);
+        }
 
         $rawToken = Node::generateToken();
 
@@ -91,8 +133,30 @@ class NodeController extends Controller
             'name' => $validated['name'],
             'region' => $validated['region'],
             'ip_address' => $validated['ip_address'],
+            'ptero_location_id' => $validated['ptero_location_id'],
+            'fqdn' => $validated['fqdn'],
+            'scheme' => $validated['scheme'],
+            'behind_proxy' => (bool) $validated['behind_proxy'],
+            'maintenance_mode' => (bool) ($validated['maintenance_mode'] ?? false),
+            'memory' => $validated['memory'],
+            'memory_overallocate' => $validated['memory_overallocate'] ?? 0,
+            'disk' => $validated['disk'],
+            'disk_overallocate' => $validated['disk_overallocate'] ?? 0,
+            'upload_size' => $validated['upload_size'],
+            'daemon_sftp' => $validated['daemon_sftp'],
+            'daemon_listen' => $validated['daemon_listen'],
+            'allocation_ip' => $validated['allocation_ip'] ?? $validated['ip_address'],
+            'allocation_alias' => $validated['allocation_alias'] ?? null,
+            'allocation_ports' => $allocationPorts,
+            'sync_status' => Node::SYNC_STATUS_PENDING,
+            'sync_error' => null,
+            'synced_at' => null,
             'token_hash' => Node::hashToken($rawToken),
         ]);
+
+        if ($this->isPterodactylNodeSyncConfigured()) {
+            SyncNodeToPterodactylJob::dispatch($node->id);
+        }
 
         return response()->json([
             'data' => [
@@ -132,12 +196,212 @@ class NodeController extends Controller
             'id' => $node->id,
             'name' => $node->name,
             'region' => $node->region,
+            'ptero_node_id' => $node->ptero_node_id,
+            'ptero_location_id' => $node->ptero_location_id,
             'ip_address' => $node->ip_address,
+            'fqdn' => $node->fqdn,
+            'scheme' => $node->scheme,
+            'behind_proxy' => (bool) $node->behind_proxy,
+            'maintenance_mode' => (bool) $node->maintenance_mode,
+            'memory' => $node->memory,
+            'memory_overallocate' => $node->memory_overallocate,
+            'disk' => $node->disk,
+            'disk_overallocate' => $node->disk_overallocate,
+            'upload_size' => $node->upload_size,
+            'daemon_sftp' => $node->daemon_sftp,
+            'daemon_listen' => $node->daemon_listen,
+            'allocation_ip' => $node->allocation_ip,
+            'allocation_alias' => $node->allocation_alias,
+            'allocation_ports' => is_array($node->allocation_ports) ? array_values($node->allocation_ports) : [],
+            'sync_status' => $node->sync_status,
+            'sync_error' => $node->sync_error,
+            'synced_at' => $node->synced_at?->toIso8601String(),
             'last_active_at' => $node->last_active_at?->toIso8601String(),
             'last_used_at' => $node->last_used_at?->toIso8601String(),
             'created_at' => $node->created_at?->toIso8601String(),
             'updated_at' => $node->updated_at?->toIso8601String(),
         ];
+    }
+
+    private function isPterodactylNodeSyncConfigured(): bool
+    {
+        $baseUrl = trim((string) config('services.pterodactyl.base_url', ''));
+        $applicationApiKey = trim((string) config('services.pterodactyl.application_api_key', ''));
+
+        return $baseUrl !== '' && $applicationApiKey !== '';
+    }
+
+    /**
+     * @return array{
+     *   items: list<array{
+     *     id: int|string|null,
+     *     ip: string|null,
+     *     alias: string|null,
+     *     port: int|null,
+     *     assigned: bool,
+     *     ptero_server_id: int|null,
+     *     server: array{
+     *       id: int,
+     *       uuid: string,
+     *       name: string,
+     *       status: string|null,
+     *       plan: string|null,
+     *       owner: array<string, mixed>|null
+     *     }|null
+     *   }>,
+     *   counts: array{total: int, assigned: int, unassigned: int},
+     *   error: string|null
+     * }
+     */
+    private function resolveNodeAllocations(Node $node, PterodactylApiClient $pterodactylApiClient): array
+    {
+        $pteroNodeId = $this->normalizePositiveInteger($node->ptero_node_id);
+
+        if ($pteroNodeId === null || ! $this->isPterodactylNodeSyncConfigured()) {
+            return [
+                'items' => [],
+                'counts' => [
+                    'total' => 0,
+                    'assigned' => 0,
+                    'unassigned' => 0,
+                ],
+                'error' => null,
+            ];
+        }
+
+        try {
+            $allocations = $pterodactylApiClient->listNodeAllocations($pteroNodeId);
+        } catch (Throwable $exception) {
+            return [
+                'items' => [],
+                'counts' => [
+                    'total' => 0,
+                    'assigned' => 0,
+                    'unassigned' => 0,
+                ],
+                'error' => trim($exception->getMessage()) !== '' ? trim($exception->getMessage()) : 'Failed to load allocations.',
+            ];
+        }
+
+        $assignedPanelServerIds = collect($allocations)
+            ->map(fn (array $allocation): ?string => $this->normalizePanelServerId($allocation['server_id'] ?? null))
+            ->filter(fn (?string $panelServerId): bool => is_string($panelServerId) && $panelServerId !== '')
+            ->values();
+
+        $serversByPteroId = $this->resolveServersByPteroId($assignedPanelServerIds);
+
+        $items = collect($allocations)->map(function (array $allocation) use ($serversByPteroId): array {
+            $assignedPanelServerIdString = $this->normalizePanelServerId($allocation['server_id'] ?? null);
+            $linkedServer = $assignedPanelServerIdString !== null
+                ? $serversByPteroId->get($assignedPanelServerIdString)
+                : null;
+
+            $linkedServerPayload = null;
+
+            if ($linkedServer instanceof Server) {
+                $linkedServerPayload = [
+                    'id' => $linkedServer->id,
+                    'uuid' => $linkedServer->uuid,
+                    'name' => $this->resolveServerName($this->decodeConfig($linkedServer->config)),
+                    'status' => $linkedServer->status,
+                    'plan' => $linkedServer->plan,
+                    'owner' => $this->transformUser($linkedServer->user),
+                ];
+            }
+
+            $pteroServerId = $this->normalizePositiveInteger($allocation['server_id'] ?? null);
+            $assigned = (bool) ($allocation['assigned'] ?? false) || $pteroServerId !== null;
+
+            return [
+                'id' => $allocation['id'] ?? null,
+                'ip' => is_string($allocation['ip'] ?? null) ? trim((string) $allocation['ip']) : null,
+                'alias' => is_string($allocation['alias'] ?? null) ? trim((string) $allocation['alias']) : null,
+                'port' => $this->normalizePositiveInteger($allocation['port'] ?? null),
+                'assigned' => $assigned,
+                'ptero_server_id' => $pteroServerId,
+                'server' => $linkedServerPayload,
+            ];
+        })->sortBy([
+            ['ip', 'asc'],
+            ['port', 'asc'],
+        ])->values()->all();
+
+        $assignedCount = collect($items)->filter(fn (array $item): bool => (bool) $item['assigned'])->count();
+        $totalCount = count($items);
+
+        return [
+            'items' => $items,
+            'counts' => [
+                'total' => $totalCount,
+                'assigned' => $assignedCount,
+                'unassigned' => max($totalCount - $assignedCount, 0),
+            ],
+            'error' => null,
+        ];
+    }
+
+    /**
+     * @param  Collection<int, string>  $panelServerIds
+     * @return Collection<string, Server>
+     */
+    private function resolveServersByPteroId(Collection $panelServerIds): Collection
+    {
+        $normalizedServerIds = $panelServerIds
+            ->filter(fn (string $panelServerId): bool => trim($panelServerId) !== '')
+            ->map(fn (string $panelServerId): string => trim($panelServerId))
+            ->unique()
+            ->values();
+
+        if ($normalizedServerIds->isEmpty()) {
+            return collect();
+        }
+
+        $servers = Server::query()
+            ->with('user')
+            ->whereIn('ptero_id', $normalizedServerIds->all())
+            ->get();
+
+        $serversByPteroId = collect();
+
+        foreach ($servers as $server) {
+            $pteroId = trim((string) ($server->ptero_id ?? ''));
+
+            if ($pteroId !== '') {
+                $serversByPteroId->put($pteroId, $server);
+            }
+        }
+
+        return $serversByPteroId;
+    }
+
+    private function normalizePanelServerId(mixed $panelServerId): ?string
+    {
+        if (is_int($panelServerId) && $panelServerId > 0) {
+            return (string) $panelServerId;
+        }
+
+        if (is_string($panelServerId) && preg_match('/^\d+$/', trim($panelServerId)) === 1) {
+            $normalized = trim($panelServerId);
+
+            return $normalized !== '0' ? $normalized : null;
+        }
+
+        return null;
+    }
+
+    private function normalizePositiveInteger(mixed $value): ?int
+    {
+        if (is_int($value) && $value > 0) {
+            return $value;
+        }
+
+        if (is_string($value) && preg_match('/^\d+$/', trim($value)) === 1) {
+            $normalized = (int) trim($value);
+
+            return $normalized > 0 ? $normalized : null;
+        }
+
+        return null;
     }
 
     /**
