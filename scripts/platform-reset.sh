@@ -175,6 +175,11 @@ run_pterodactyl_provisioning() {
     orchestrator php artisan test:provision-local --no-interaction
 }
 
+refresh_store_node_capacity() {
+  echo "Refreshing node free-space cache for backend/store availability..."
+  docker compose exec -T orchestrator php artisan pterodactyl:update-location-free-space --no-interaction
+}
+
 start_required_services
 wait_for_mysql_ready
 wait_for_php_service_port backend 8000
@@ -189,6 +194,7 @@ fi
 ensure_pterodactyl_database
 run_migrations
 run_pterodactyl_provisioning
+refresh_store_node_capacity
 
 if [ "$rebuild" = "true" ]; then
   echo "Platform reset complete (with full container rebuild)."
