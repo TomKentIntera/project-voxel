@@ -364,6 +364,43 @@ services:
     networks:
       - platform
 
+  pterodactyl-db-seed:
+    image: mysql:8.0
+    depends_on:
+      mysql:
+        condition: service_healthy
+    entrypoint:
+      - /bin/sh
+      - -ec
+      - |
+        until mysql -hmysql -upterodactyl -psecret pterodactyl -e "SELECT 1" >/dev/null 2>&1; do
+          sleep 2
+        done
+
+        users_table_exists="$(mysql -hmysql -upterodactyl -psecret pterodactyl -Nse "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='pterodactyl' AND table_name='users';")"
+        should_seed=0
+
+        if [ "$${users_table_exists}" = "0" ]; then
+          should_seed=1
+        else
+          users_count="$(mysql -hmysql -upterodactyl -psecret pterodactyl -Nse "SELECT COUNT(*) FROM users;")"
+          if [ "$${users_count}" = "0" ]; then
+            should_seed=1
+          fi
+        fi
+
+        if [ "$${should_seed}" = "1" ]; then
+          echo "Seeding pterodactyl database from SQL dump..."
+          mysql -hmysql -upterodactyl -psecret pterodactyl < /seed/pterodactyl.sql
+          echo "Pterodactyl seed import completed."
+        else
+          echo "Pterodactyl database already populated, skipping seed import."
+        fi
+    volumes:
+      - ./docker/mysql/init/20-pterodactyl.sql:/seed/pterodactyl.sql:ro
+    networks:
+      - platform
+
   pterodactyl-wings:
     image: ghcr.io/pterodactyl/wings:latest
     profiles:
