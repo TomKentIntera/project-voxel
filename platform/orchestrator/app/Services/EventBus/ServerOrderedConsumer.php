@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Services\EventBus;
 
+use App\Jobs\ProcessServerLifecycleEventProcessor;
 use Illuminate\Http\Client\Response;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
@@ -14,27 +15,8 @@ use Throwable;
 
 class ServerOrderedConsumer
 {
-    private const SERVER_ORDERED_EVENT_CONSUMER = 'server_ordered_event_consumer';
-    private const SERVER_PROVISIONED_EVENT_CONSUMER = 'server_provisioned_event_consumer';
-
-    /**
-     * @var array<string, list<string>>
-     */
-    private const EVENT_TYPE_TO_CONSUMERS = [
-        'server.ordered.v1' => [
-            self::SERVER_ORDERED_EVENT_CONSUMER,
-        ],
-        'server.provisioned' => [
-            self::SERVER_PROVISIONED_EVENT_CONSUMER,
-        ],
-        'server.provisioned.v1' => [
-            self::SERVER_PROVISIONED_EVENT_CONSUMER,
-        ],
-    ];
-
     public function __construct(
-        private readonly ServerOrderedLifecycleEventConsumer $serverOrderedLifecycleEventConsumer,
-        private readonly ServerProvisionedLifecycleEventConsumer $serverProvisionedLifecycleEventConsumer,
+        private readonly ServerLifecycleEventProcessorMap $processorMap,
     ) {}
 
     public function consumeBatch(int $maxMessages = 10, int $waitTimeSeconds = 20): int
@@ -199,28 +181,16 @@ class ServerOrderedConsumer
      */
     private function fanOutToEventConsumers(string $eventType, array $eventPayload): bool
     {
-        $consumerKeys = self::EVENT_TYPE_TO_CONSUMERS[$eventType] ?? [];
-        if ($consumerKeys === []) {
+        $processorKeys = $this->processorMap->processorKeysForEventType($eventType);
+        if ($processorKeys === []) {
             return false;
         }
 
-        foreach ($consumerKeys as $consumerKey) {
-            $this->resolveConsumer($consumerKey)->consume($eventPayload);
+        foreach ($processorKeys as $processorKey) {
+            ProcessServerLifecycleEventProcessor::dispatchSync($processorKey, $eventPayload);
         }
 
         return true;
-    }
-
-    private function resolveConsumer(string $consumerKey): ServerLifecycleEventConsumer
-    {
-        return match ($consumerKey) {
-            self::SERVER_ORDERED_EVENT_CONSUMER => $this->serverOrderedLifecycleEventConsumer,
-            self::SERVER_PROVISIONED_EVENT_CONSUMER => $this->serverProvisionedLifecycleEventConsumer,
-            default => throw new RuntimeException(sprintf(
-                'Unsupported server ordered consumer key "%s".',
-                $consumerKey,
-            )),
-        };
     }
 
     /**

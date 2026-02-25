@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Services\EventBus;
 
+use App\Jobs\ProcessServerLifecycleEventProcessor;
 use Illuminate\Http\Client\Response;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
@@ -14,28 +15,8 @@ use Throwable;
 
 class ServerLifecycleCacheInvalidationConsumer
 {
-    private const CACHE_INVALIDATION_CONSUMER = 'cache_invalidation';
-
-    /**
-     * @var array<string, list<string>>
-     */
-    private const EVENT_TYPE_TO_CONSUMERS = [
-        'server.provisioned' => [
-            self::CACHE_INVALIDATION_CONSUMER,
-        ],
-        'server.provisioned.v1' => [
-            self::CACHE_INVALIDATION_CONSUMER,
-        ],
-        'server.migrated' => [
-            self::CACHE_INVALIDATION_CONSUMER,
-        ],
-        'server.migrated.v1' => [
-            self::CACHE_INVALIDATION_CONSUMER,
-        ],
-    ];
-
     public function __construct(
-        private readonly ServerLifecycleCacheInvalidationEventConsumer $serverLifecycleCacheInvalidationEventConsumer,
+        private readonly ServerLifecycleEventProcessorMap $processorMap,
     ) {}
 
     public function consumeBatch(int $maxMessages = 10, int $waitTimeSeconds = 20): int
@@ -210,27 +191,16 @@ class ServerLifecycleCacheInvalidationConsumer
      */
     private function fanOutToEventConsumers(string $eventType, array $eventPayload): bool
     {
-        $consumerKeys = self::EVENT_TYPE_TO_CONSUMERS[$eventType] ?? [];
-        if ($consumerKeys === []) {
+        $processorKeys = $this->processorMap->processorKeysForEventType($eventType);
+        if ($processorKeys === []) {
             return false;
         }
 
-        foreach ($consumerKeys as $consumerKey) {
-            $this->resolveConsumer($consumerKey)->consume($eventPayload);
+        foreach ($processorKeys as $processorKey) {
+            ProcessServerLifecycleEventProcessor::dispatchSync($processorKey, $eventPayload);
         }
 
         return true;
-    }
-
-    private function resolveConsumer(string $consumerKey): ServerLifecycleEventConsumer
-    {
-        return match ($consumerKey) {
-            self::CACHE_INVALIDATION_CONSUMER => $this->serverLifecycleCacheInvalidationEventConsumer,
-            default => throw new RuntimeException(sprintf(
-                'Unsupported server lifecycle consumer key "%s".',
-                $consumerKey,
-            )),
-        };
     }
 
     /**
