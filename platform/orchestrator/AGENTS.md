@@ -85,6 +85,7 @@ laravel-project/
 - Favor dependency injection and service containers
 - Ensure all services maintain high unit test coverage
 - Make use of docker containers where posible for testing on windows & macos (silicon)
+- For event queues, default to a single queue entrypoint that parses payloads, maps by `event_type`, and fans out to one or more processors (prefer processor jobs for fan-out).
 - NEVER modify a migration. Migrations are considered immutable, and a subsequent migration should be created to alter the table.
 - Place each enum in its own file named `{Thing}Enum.php` within the appropriate `App/Services/...` subdirectory (for example, `App/Services/Posts/Media/TypeEnum.php`).
 - Run `php artisan test` locally and ensure it passes before opening a PR with backend changes.
