@@ -144,6 +144,9 @@ pterodactyl_admin_username="${PTERODACTYL_ADMIN_USERNAME:-tom}"
 pterodactyl_admin_first_name="${PTERODACTYL_ADMIN_FIRST_NAME:-Tom}"
 pterodactyl_admin_last_name="${PTERODACTYL_ADMIN_LAST_NAME:-Kent}"
 pterodactyl_admin_password="${PTERODACTYL_ADMIN_PASSWORD:-secret1234}"
+# This must match the app key material inserted into pterodactyl.api_keys for
+# local orchestrator provisioning, and can be mirrored in root .env.
+pterodactyl_application_api_key_fixed="${PTERODACTYL_APPLICATION_API_KEY:-ptla_yN9hRbzk2otKP7EQctxKHXY9E/FFB9nsFvkrQyi9mtktDEwS+HxInd3o9PXiwWetD4Y209JGQ1b/}"
 
 seed_pterodactyl_admin_user() {
   echo "Seeding Pterodactyl admin user (${pterodactyl_admin_email})..."
@@ -157,16 +160,67 @@ seed_pterodactyl_admin_user() {
     --no-interaction
 }
 
-generate_pterodactyl_application_api_key() {
-  echo "Generating Pterodactyl application API key for local provisioning..." >&2
-  docker compose exec -T \
-    -e PTERODACTYL_PROVISION_ADMIN_EMAIL="$pterodactyl_admin_email" \
-    pterodactyl-panel php /dev/stdin < "$SCRIPT_DIR/pterodactyl-generate-api-key.php"
+upsert_pterodactyl_application_api_key() {
+  echo "Upserting fixed Pterodactyl application API key for local provisioning..."
+
+  docker compose exec -T mysql mysql -uroot -psecret pterodactyl <<SQL
+SET @admin_user_id := (
+  SELECT id
+  FROM users
+  WHERE email = '${pterodactyl_admin_email}'
+  ORDER BY id ASC
+  LIMIT 1
+);
+
+DELETE FROM api_keys
+WHERE memo = 'Local orchestrator provisioning key'
+  AND key_type = 2;
+
+INSERT INTO api_keys (
+  user_id,
+  key_type,
+  identifier,
+  token,
+  allowed_ips,
+  memo,
+  created_at,
+  updated_at,
+  r_servers,
+  r_nodes,
+  r_allocations,
+  r_users,
+  r_locations,
+  r_nests,
+  r_eggs,
+  r_database_hosts,
+  r_server_databases
+)
+VALUES (
+  @admin_user_id,
+  2,
+  'ptla_yN9hRbzk2ot',
+  'eyJpdiI6IkplWU04Y0lGVWlNanM3Wm1rMitJQ2c9PSIsInZhbHVlIjoiS1A3RVFjdHhLSFhZOUUvRlFCOW5zRnZrclF5aTltdGtERXdTK0h4SW5kM285UFhpd1dldEQ0WTIwOUpGQTFiLyIsIm1hYyI6ImQ4YjZhZDgwM2M5ZWEyZmI0MmZkNGQyODIyMzhiNjU3NDJiNTVkZTgxZTNhZThkNDhlZjMyNmM1MzNiMDVmMGYiLCJ0YWciOiIifQ==',
+  '[]',
+  'Local orchestrator provisioning key',
+  UTC_TIMESTAMP(),
+  UTC_TIMESTAMP(),
+  3,
+  3,
+  3,
+  3,
+  3,
+  3,
+  3,
+  3,
+  3
+);
+SQL
 }
 
 run_pterodactyl_provisioning() {
   seed_pterodactyl_admin_user
-  pterodactyl_application_api_key="$(generate_pterodactyl_application_api_key)"
+  upsert_pterodactyl_application_api_key
+  pterodactyl_application_api_key="$pterodactyl_application_api_key_fixed"
 
   echo "Running local Pterodactyl/Wings provisioning..."
   docker compose exec -T \
@@ -177,7 +231,10 @@ run_pterodactyl_provisioning() {
 
 refresh_store_node_capacity() {
   echo "Refreshing node free-space cache for backend/store availability..."
-  docker compose exec -T orchestrator php artisan pterodactyl:update-location-free-space --no-interaction
+  docker compose exec -T \
+    -e PTERODACTYL_BASE_URL="http://pterodactyl-panel" \
+    -e PTERODACTYL_APPLICATION_API_KEY="$pterodactyl_application_api_key" \
+    orchestrator php artisan pterodactyl:update-location-free-space --no-interaction
 }
 
 start_required_services

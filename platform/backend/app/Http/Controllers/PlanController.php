@@ -20,6 +20,7 @@ class PlanController extends Controller
     public function index(): JsonResponse
     {
         $locationsCache = $this->locationsCacheReader->maxFreeMemoryByLocationShortCode();
+        $cachedLocations = $this->locationsCacheReader->locations();
 
         $plans = collect(config('plans.planList'))->map(function (array $plan) use ($locationsCache): array {
             $availability = [];
@@ -44,13 +45,35 @@ class PlanController extends Controller
             ];
         })->values()->all();
 
-        $locations = collect(config('plans.locations'))->map(function (array $location, string $key): array {
-            return [
-                'key' => $key,
-                'title' => $location['title'],
-                'flag' => $location['flag'],
-            ];
-        })->values()->all();
+        $configLocationsByPteroShort = collect(config('plans.locations'))
+            ->mapWithKeys(function (array $location, string $key): array {
+                $pteroShortCode = trim((string) ($location['ptero_location'] ?? ''));
+
+                if ($pteroShortCode === '') {
+                    return [];
+                }
+
+                return [$pteroShortCode => [
+                    'key' => $key,
+                    'title' => $location['title'] ?? $pteroShortCode,
+                    'flag' => $location['flag'] ?? '',
+                ]];
+            });
+
+        $locations = collect($cachedLocations)->map(
+            function (array $location) use ($configLocationsByPteroShort): array {
+                $configLocation = $configLocationsByPteroShort->get($location['short'], []);
+
+                return [
+                    'short' => $location['short'],
+                    'long' => $location['long'],
+                    'maxFreeMemory' => $location['maxFreeMemory'],
+                    'key' => $configLocation['key'] ?? $location['short'],
+                    'title' => $configLocation['title'] ?? ($location['long'] !== '' ? $location['long'] : $location['short']),
+                    'flag' => $configLocation['flag'] ?? '',
+                ];
+            }
+        )->values()->all();
 
         // Build modpacks list with resolved starting prices
         $modpacks = collect(config('plans.modpacks', []))->map(function (array $modpack): array {

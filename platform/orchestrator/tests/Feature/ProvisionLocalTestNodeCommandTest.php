@@ -36,7 +36,7 @@ class ProvisionLocalTestNodeCommandTest extends TestCase
                         'object' => 'location',
                         'attributes' => [
                             'id' => 9,
-                            'short' => 'eu.ger',
+                            'short' => 'eu.de',
                         ],
                     ], 201);
                 }
@@ -85,7 +85,7 @@ class ProvisionLocalTestNodeCommandTest extends TestCase
         $node = Node::query()->find('node-1');
         $this->assertNotNull($node);
         $this->assertSame('node-1', $node->name);
-        $this->assertSame('eu.ger', $node->region);
+        $this->assertSame('eu.de', $node->region);
         $this->assertSame('127.0.0.1', $node->ip_address);
         $this->assertSame(9, $node->ptero_location_id);
         $this->assertSame(987, $node->ptero_node_id);
@@ -98,7 +98,7 @@ class ProvisionLocalTestNodeCommandTest extends TestCase
         Http::assertSent(static function (HttpClientRequest $request): bool {
             return $request->method() === 'POST'
                 && $request->url() === 'https://panel.example.com/api/application/locations'
-                && ($request->data()['short'] ?? null) === 'eu.ger'
+                && ($request->data()['short'] ?? null) === 'eu.de'
                 && ($request->data()['long'] ?? null) === 'Local development';
         });
 

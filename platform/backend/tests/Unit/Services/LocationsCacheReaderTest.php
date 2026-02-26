@@ -91,4 +91,21 @@ class LocationsCacheReaderTest extends TestCase
         $second = $reader->maxFreeMemoryByLocationShortCode();
         $this->assertSame(['eu.de' => 8192], $second);
     }
+
+    public function test_it_normalizes_storage_app_path_for_shared_storage_key(): void
+    {
+        config()->set('services.locations_cache.path', '/var/www/html/storage/app/locations.json');
+
+        Storage::disk('locations_cache')->put('locations.json', json_encode([
+            'locations' => [
+                ['short' => 'eu.de', 'maxFreeMemory' => 2048],
+            ],
+        ], JSON_THROW_ON_ERROR));
+
+        $reader = app(LocationsCacheReader::class);
+
+        $map = $reader->maxFreeMemoryByLocationShortCode();
+
+        $this->assertSame(['eu.de' => 2048], $map);
+    }
 }

@@ -23,6 +23,22 @@ class LocationsCacheReader
     {
         $map = [];
 
+        foreach ($this->locations() as $location) {
+            $map[$location['short']] = $location['maxFreeMemory'];
+        }
+
+        return $map;
+    }
+
+    /**
+     * Return normalized location rows from the shared locations cache payload.
+     *
+     * @return list<array{short: string, long: string, maxFreeMemory: int}>
+     */
+    public function locations(): array
+    {
+        $rows = [];
+
         foreach ($this->cachedPayload()['locations'] ?? [] as $location) {
             if (! is_array($location)) {
                 continue;
@@ -34,10 +50,14 @@ class LocationsCacheReader
                 continue;
             }
 
-            $map[$shortCode] = (int) ($location['maxFreeMemory'] ?? 0);
+            $rows[] = [
+                'short' => $shortCode,
+                'long' => trim((string) ($location['long'] ?? '')),
+                'maxFreeMemory' => (int) ($location['maxFreeMemory'] ?? 0),
+            ];
         }
 
-        return $map;
+        return $rows;
     }
 
     /**
@@ -46,12 +66,24 @@ class LocationsCacheReader
     private function cachedPayload(): array
     {
         $cacheTtlSeconds = max(1, (int) config('services.locations_cache.ttl_seconds', 60));
+        $cacheKey = $this->payloadCacheKey();
 
-        return $this->cache->remember(
-            $this->payloadCacheKey(),
-            now()->addSeconds($cacheTtlSeconds),
-            fn (): array => $this->readPayloadFromStorage(),
-        );
+        $cached = $this->cache->get($cacheKey);
+        if (is_array($cached) && $cached !== []) {
+            return $cached;
+        }
+
+        $freshPayload = $this->readPayloadFromStorage();
+        if ($freshPayload === []) {
+            // Do not cache empty payloads; we want to recover quickly once data appears in MinIO.
+            $this->cache->forget($cacheKey);
+
+            return [];
+        }
+
+        $this->cache->put($cacheKey, $freshPayload, now()->addSeconds($cacheTtlSeconds));
+
+        return $freshPayload;
     }
 
     public function forgetCachedPayload(): void
@@ -65,7 +97,7 @@ class LocationsCacheReader
     private function readPayloadFromStorage(): array
     {
         $disk = (string) config('services.locations_cache.disk', 'locations_cache');
-        $path = trim((string) config('services.locations_cache.path', 'locations.json'));
+        $path = $this->locationsCachePath();
 
         if ($path === '') {
             return [];
@@ -89,8 +121,31 @@ class LocationsCacheReader
     private function payloadCacheKey(): string
     {
         $disk = (string) config('services.locations_cache.disk', 'locations_cache');
-        $path = trim((string) config('services.locations_cache.path', 'locations.json'));
+        $path = $this->locationsCachePath();
 
         return sprintf('plans.locations-cache.%s.%s', $disk, md5($path));
+    }
+
+    private function locationsCachePath(): string
+    {
+        $configuredPath = trim((string) config('services.locations_cache.path', 'locations.json'));
+
+        if ($configuredPath === '') {
+            return 'locations.json';
+        }
+
+        $normalizedPath = str_replace('\\', '/', $configuredPath);
+        $storageAppMarker = '/storage/app/';
+
+        if (str_contains($normalizedPath, $storageAppMarker)) {
+            $normalizedPath = (string) substr(
+                $normalizedPath,
+                strpos($normalizedPath, $storageAppMarker) + strlen($storageAppMarker)
+            );
+        } else {
+            $normalizedPath = ltrim($normalizedPath, '/');
+        }
+
+        return $normalizedPath !== '' ? $normalizedPath : 'locations.json';
     }
 }

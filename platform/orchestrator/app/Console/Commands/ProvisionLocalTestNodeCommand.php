@@ -19,9 +19,9 @@ class ProvisionLocalTestNodeCommand extends Command
     {
         $nodeId = 'node-1';
         $nodeName = 'node-1';
-        $nodeRegion = 'eu.ger';
+        $nodeRegion = 'eu.de';
         $allocationPorts = ['26625-26695'];
-        $locationShortCode = 'eu.ger';
+        $locationShortCode = 'eu.de';
         $locationLongName = 'Local development';
         $defaultPteroLocationId = 1;
 

@@ -453,7 +453,7 @@ class ServerDestinationOrchestratorService
         }
 
         $disk = (string) config('services.locations_cache.disk', 'locations_cache');
-        $path = trim((string) config('services.locations_cache.path', 'locations.json'));
+        $path = $this->locationsCachePath();
 
         if ($path === '') {
             return [];
@@ -512,5 +512,28 @@ class ServerDestinationOrchestratorService
         $trimmed = trim($value);
 
         return $trimmed === '' ? null : strtolower($trimmed);
+    }
+
+    private function locationsCachePath(): string
+    {
+        $configuredPath = trim((string) config('services.locations_cache.path', 'locations.json'));
+
+        if ($configuredPath === '') {
+            return 'locations.json';
+        }
+
+        $normalizedPath = str_replace('\\', '/', $configuredPath);
+        $storageAppMarker = '/storage/app/';
+
+        if (str_contains($normalizedPath, $storageAppMarker)) {
+            $normalizedPath = (string) substr(
+                $normalizedPath,
+                strpos($normalizedPath, $storageAppMarker) + strlen($storageAppMarker)
+            );
+        } else {
+            $normalizedPath = ltrim($normalizedPath, '/');
+        }
+
+        return $normalizedPath !== '' ? $normalizedPath : 'locations.json';
     }
 }

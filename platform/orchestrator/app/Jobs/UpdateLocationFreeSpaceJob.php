@@ -167,6 +167,22 @@ class UpdateLocationFreeSpaceJob implements ShouldQueue
     {
         $configuredPath = trim((string) config('services.locations_cache.path', 'locations.json'));
 
-        return $configuredPath !== '' ? $configuredPath : 'locations.json';
+        if ($configuredPath === '') {
+            return 'locations.json';
+        }
+
+        $normalizedPath = str_replace('\\', '/', $configuredPath);
+        $storageAppMarker = '/storage/app/';
+
+        if (str_contains($normalizedPath, $storageAppMarker)) {
+            $normalizedPath = (string) substr(
+                $normalizedPath,
+                strpos($normalizedPath, $storageAppMarker) + strlen($storageAppMarker)
+            );
+        } else {
+            $normalizedPath = ltrim($normalizedPath, '/');
+        }
+
+        return $normalizedPath !== '' ? $normalizedPath : 'locations.json';
     }
 }

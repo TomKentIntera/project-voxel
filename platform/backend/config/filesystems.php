@@ -62,7 +62,9 @@ return [
 
         'locations_cache' => [
             'driver' => env('LOCATIONS_CACHE_DRIVER', 'local'),
-            'root' => env('LOCATIONS_CACHE_LOCAL_ROOT') ?: storage_path('app'),
+            'root' => env('LOCATIONS_CACHE_DRIVER', 'local') === 'local'
+                ? (env('LOCATIONS_CACHE_LOCAL_ROOT') ?: storage_path('app'))
+                : env('LOCATIONS_CACHE_ROOT', ''),
             'key' => env('LOCATIONS_CACHE_AWS_ACCESS_KEY_ID'),
             'secret' => env('LOCATIONS_CACHE_AWS_SECRET_ACCESS_KEY'),
             'region' => env('LOCATIONS_CACHE_AWS_DEFAULT_REGION', 'us-east-1'),

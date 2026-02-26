@@ -217,24 +217,24 @@ class PterodactylApiClientTest extends TestCase
                 'object' => 'location',
                 'attributes' => [
                     'id' => 55,
-                    'short' => 'eu.ger',
+                    'short' => 'eu.de',
                 ],
             ], 201),
         ]);
 
         $client = app(PterodactylApiClient::class);
         $location = $client->createLocation([
-            'short' => 'eu.ger',
+            'short' => 'eu.de',
             'long' => 'Local development',
         ]);
 
         $this->assertSame(55, $location['id']);
-        $this->assertSame('eu.ger', $location['short']);
+        $this->assertSame('eu.de', $location['short']);
 
         Http::assertSent(function (Request $request): bool {
             return $request->method() === 'POST'
                 && $request->url() === 'https://panel.example.com/api/application/locations'
-                && ($request->data()['short'] ?? null) === 'eu.ger'
+                && ($request->data()['short'] ?? null) === 'eu.de'
                 && ($request->data()['long'] ?? null) === 'Local development';
         });
     }

@@ -127,4 +127,20 @@ class UpdateLocationFreeSpaceCacheTest extends TestCase
                 && ($query['include'] ?? null) === 'nodes';
         });
     }
+
+    public function test_it_normalizes_storage_app_path_when_writing_shared_cache(): void
+    {
+        config()->set('services.locations_cache.path', '/var/www/html/storage/app/locations.json');
+
+        Http::fake([
+            'https://panel.example.com/api/application/locations*' => Http::response([
+                'data' => [],
+            ]),
+        ]);
+
+        $this->artisan('pterodactyl:update-location-free-space')
+            ->assertSuccessful();
+
+        Storage::disk('locations_cache')->assertExists('locations.json');
+    }
 }
