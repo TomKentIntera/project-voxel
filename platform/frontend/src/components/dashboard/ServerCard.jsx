@@ -1,6 +1,6 @@
 import { useState } from 'react'
-import { Link } from 'react-router-dom'
 import { useAuth } from '../../context/useAuth'
+import { useBillingPortal } from '../../hooks/useBillingPortal'
 import { fetchServerPanelUrl } from '../../utils/serversApi'
 import { getErrorMessage } from '../../utils/getErrorMessage'
 
@@ -12,6 +12,7 @@ import { getErrorMessage } from '../../utils/getErrorMessage'
  */
 export default function ServerCard({ server }) {
   const { token } = useAuth()
+  const { openBillingPortal, isOpeningBillingPortal, billingError } = useBillingPortal()
   const [isOpeningPanel, setIsOpeningPanel] = useState(false)
   const [panelError, setPanelError] = useState('')
 
@@ -83,9 +84,15 @@ export default function ServerCard({ server }) {
                   </button>
                 </p>
                 <p>
-                  <Link to="/dashboard/billing" className="btn btn-green btn-red w-100">
-                    <i className="fas fa-times text-white button"></i> Cancel Server
-                  </Link>
+                  <button
+                    type="button"
+                    className="btn btn-green btn-red w-100"
+                    onClick={openBillingPortal}
+                    disabled={isOpeningBillingPortal}
+                  >
+                    <i className="fas fa-times text-white button"></i>{' '}
+                    {isOpeningBillingPortal ? 'Opening Billing...' : 'Cancel Server'}
+                  </button>
                 </p>
               </>
             )
@@ -105,6 +112,7 @@ export default function ServerCard({ server }) {
           )}
 
           {panelError ? <p className="text-red">{panelError}</p> : null}
+          {billingError ? <p className="text-red">{billingError}</p> : null}
         </div>
       </div>
     </div>

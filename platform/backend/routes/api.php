@@ -2,6 +2,7 @@
 
 use Interadigital\CoreAuth\Http\Controllers\AuthController;
 use App\Http\Controllers\BannerController;
+use App\Http\Controllers\BillingController;
 use App\Http\Controllers\FaqController;
 use App\Http\Controllers\PlanController;
 use App\Http\Controllers\ServerController;
@@ -18,6 +19,7 @@ Route::prefix('auth')->group(function (): void {
 Route::middleware('auth.jwt')->group(function (): void {
     Route::get('/servers', [ServerController::class, 'index']);
     Route::get('/servers/{uuid}/panel-url', [ServerController::class, 'panelUrl']);
+    Route::post('/billing/portal-session', [BillingController::class, 'portalSession']);
 });
 
 Route::get('/banner', [BannerController::class, 'index']);

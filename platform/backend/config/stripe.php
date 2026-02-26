@@ -19,4 +19,9 @@ return [
         'STRIPE_CHECKOUT_CANCEL_URL',
         rtrim((string) env('FRONTEND_URL', 'http://localhost'), '/').'/billing/cancel'
     ),
+
+    'portal_return_url' => env(
+        'STRIPE_PORTAL_RETURN_URL',
+        rtrim((string) env('FRONTEND_URL', 'http://localhost'), '/').'/dashboard'
+    ),
 ];
