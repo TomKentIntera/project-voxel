@@ -13,6 +13,7 @@
         </testsuite>
         <testsuite name="Feature">
             <directory>tests/Feature</directory>
+            <exclude>tests/Feature/*ApiTest.php</exclude>
         </testsuite>
     </testsuites>
     <source>

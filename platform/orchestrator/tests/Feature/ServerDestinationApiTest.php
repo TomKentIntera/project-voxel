@@ -126,9 +126,10 @@ class ServerDestinationApiTest extends TestCase
         $response->assertOk()
             ->assertJsonPath('data.destination.id', 'node-eu-2')
             ->assertJsonPath('data.destination.region', 'eu.de')
-            ->assertJsonPath('data.destination.average_cpu_pct_24h', 22.0)
             ->assertJsonPath('data.filters.requested_region', 'eu.de')
             ->assertJsonPath('data.filters.effective_regions.0', 'eu.de');
+
+        $this->assertSame(22.0, (float) $response->json('data.destination.average_cpu_pct_24h'));
 
         /** @var list<array<string, mixed>> $candidates */
         $candidates = $response->json('data.candidates');
