@@ -4,15 +4,18 @@ declare(strict_types=1);
 
 namespace Tests\Unit\Services\EventBus;
 
+use App\Jobs\SendSlackNotification;
+use App\Mail\ServerProvisionedMail;
 use App\Services\EventBus\ServerProvisionedLifecycleEventConsumer;
 use App\Services\EventBus\ServerProvisionedNotificationDispatcher;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Mail;
+use Illuminate\Support\Facades\Queue;
 use Interadigital\CoreModels\Enums\ServerEventType;
 use Interadigital\CoreModels\Enums\ServerStatus;
 use Interadigital\CoreModels\Models\Server;
 use Interadigital\CoreModels\Models\ServerEvent;
 use Interadigital\CoreModels\Models\User;
-use Mockery;
 use Tests\TestCase;
 
 class ServerProvisionedLifecycleEventConsumerTest extends TestCase
@@ -21,6 +24,11 @@ class ServerProvisionedLifecycleEventConsumerTest extends TestCase
 
     public function test_it_marks_server_provisioned_records_event_and_dispatches_notifications(): void
     {
+        config()->set('slack.channels.servers', 'CSERVERS');
+        config()->set('slack.channels.orders', 'CORDERS');
+        Mail::fake();
+        Queue::fake();
+
         $user = User::factory()->create();
         $server = Server::factory()->create([
             'user_id' => $user->id,
@@ -28,11 +36,7 @@ class ServerProvisionedLifecycleEventConsumerTest extends TestCase
             'initialised' => false,
         ]);
 
-        $dispatcher = Mockery::mock(ServerProvisionedNotificationDispatcher::class);
-        $dispatcher->shouldReceive('dispatch')
-            ->once()
-            ->withArgs(static fn (Server $resolved): bool => (int) $resolved->id === (int) $server->id);
-
+        $dispatcher = app(ServerProvisionedNotificationDispatcher::class);
         $consumer = new ServerProvisionedLifecycleEventConsumer($dispatcher);
 
         $consumer->consume([
@@ -51,10 +55,18 @@ class ServerProvisionedLifecycleEventConsumerTest extends TestCase
             'server_id' => $server->id,
             'type' => ServerEventType::SERVER_PROVISIONED->value,
         ]);
+
+        Mail::assertSent(ServerProvisionedMail::class);
+        Queue::assertPushed(SendSlackNotification::class);
     }
 
     public function test_it_is_idempotent_for_duplicate_event_ids(): void
     {
+        config()->set('slack.channels.servers', 'CSERVERS');
+        config()->set('slack.channels.orders', 'CORDERS');
+        Mail::fake();
+        Queue::fake();
+
         $user = User::factory()->create();
         $server = Server::factory()->create([
             'user_id' => $user->id,
@@ -71,9 +83,7 @@ class ServerProvisionedLifecycleEventConsumerTest extends TestCase
             ],
         ]);
 
-        $dispatcher = Mockery::mock(ServerProvisionedNotificationDispatcher::class);
-        $dispatcher->shouldNotReceive('dispatch');
-
+        $dispatcher = app(ServerProvisionedNotificationDispatcher::class);
         $consumer = new ServerProvisionedLifecycleEventConsumer($dispatcher);
 
         $consumer->consume([
@@ -89,5 +99,8 @@ class ServerProvisionedLifecycleEventConsumerTest extends TestCase
                 ->where('type', ServerEventType::SERVER_PROVISIONED->value)
                 ->count(),
         );
+
+        Mail::assertNothingSent();
+        Queue::assertNothingPushed();
     }
 }

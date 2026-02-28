@@ -5,14 +5,18 @@ declare(strict_types=1);
 namespace Tests\Unit\Services\EventBus;
 
 use App\Services\EventBus\ServerOrderedConsumer;
-use App\Services\EventBus\ServerOrderedLifecycleEventConsumer;
-use App\Services\EventBus\ServerProvisionedLifecycleEventConsumer;
+use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Http;
-use Mockery;
+use Interadigital\CoreModels\Enums\ServerEventType;
+use Interadigital\CoreModels\Enums\ServerStatus;
+use Interadigital\CoreModels\Models\Server;
+use Interadigital\CoreModels\Models\User;
 use Tests\TestCase;
 
 class ServerOrderedConsumerTest extends TestCase
 {
+    use RefreshDatabase;
+
     protected function setUp(): void
     {
         parent::setUp();
@@ -28,23 +32,19 @@ class ServerOrderedConsumerTest extends TestCase
 
     public function test_it_routes_server_ordered_events_to_the_server_ordered_consumer(): void
     {
-        $orderedConsumer = Mockery::mock(ServerOrderedLifecycleEventConsumer::class);
-        $orderedConsumer->shouldReceive('consume')
-            ->once()
-            ->withArgs(static fn (array $payload): bool => ($payload['event_type'] ?? null) === 'server.ordered.v1');
-        $this->app->instance(ServerOrderedLifecycleEventConsumer::class, $orderedConsumer);
-
-        $provisionedConsumer = Mockery::mock(ServerProvisionedLifecycleEventConsumer::class);
-        $provisionedConsumer->shouldNotReceive('consume');
-        $this->app->instance(ServerProvisionedLifecycleEventConsumer::class, $provisionedConsumer);
+        $user = User::factory()->create();
+        $server = Server::factory()->create([
+            'user_id' => $user->id,
+            'status' => ServerStatus::NEW->value,
+        ]);
 
         Http::fakeSequence()
             ->push($this->receiveMessageResponseXml('server.ordered.v1', [
                 'event_id' => 'evt-ordered-1',
                 'occurred_at' => '2026-02-25T00:00:00Z',
-                'server_id' => 10,
-                'server_uuid' => 'srv-10',
-                'user_id' => 7,
+                'server_id' => (int) $server->id,
+                'server_uuid' => (string) $server->uuid,
+                'user_id' => (int) $user->id,
                 'plan' => 'panda',
                 'config' => [],
             ]), 200)
@@ -55,25 +55,28 @@ class ServerOrderedConsumerTest extends TestCase
         $processed = $consumer->consumeBatch(maxMessages: 1, waitTimeSeconds: 0);
 
         $this->assertSame(1, $processed);
+        $server->refresh();
+        $this->assertSame(ServerStatus::PROVISIONING->value, $server->status);
+        $this->assertDatabaseHas('server_events', [
+            'server_id' => $server->id,
+            'type' => ServerEventType::SERVER_PROVISIONING_STARTED->value,
+        ]);
     }
 
     public function test_it_routes_server_provisioned_events_to_the_provisioned_consumer(): void
     {
-        $orderedConsumer = Mockery::mock(ServerOrderedLifecycleEventConsumer::class);
-        $orderedConsumer->shouldNotReceive('consume');
-        $this->app->instance(ServerOrderedLifecycleEventConsumer::class, $orderedConsumer);
-
-        $provisionedConsumer = Mockery::mock(ServerProvisionedLifecycleEventConsumer::class);
-        $provisionedConsumer->shouldReceive('consume')
-            ->once()
-            ->withArgs(static fn (array $payload): bool => ($payload['event_type'] ?? null) === 'server.provisioned');
-        $this->app->instance(ServerProvisionedLifecycleEventConsumer::class, $provisionedConsumer);
+        $user = User::factory()->create();
+        $server = Server::factory()->create([
+            'user_id' => $user->id,
+            'status' => ServerStatus::PROVISIONING->value,
+            'initialised' => false,
+        ]);
 
         Http::fakeSequence()
             ->push($this->receiveMessageResponseXml('server.provisioned', [
                 'event_id' => 'evt-provisioned-1',
                 'occurred_at' => '2026-02-25T00:00:00Z',
-                'server_id' => 10,
+                'server_id' => (int) $server->id,
             ]), 200)
             ->push($this->deleteMessageResponseXml(), 200);
 
@@ -82,18 +85,17 @@ class ServerOrderedConsumerTest extends TestCase
         $processed = $consumer->consumeBatch(maxMessages: 1, waitTimeSeconds: 0);
 
         $this->assertSame(1, $processed);
+        $server->refresh();
+        $this->assertSame(ServerStatus::PROVISIONED->value, $server->status);
+        $this->assertTrue((bool) $server->initialised);
+        $this->assertDatabaseHas('server_events', [
+            'server_id' => $server->id,
+            'type' => ServerEventType::SERVER_PROVISIONED->value,
+        ]);
     }
 
     public function test_it_ignores_unmapped_event_types(): void
     {
-        $orderedConsumer = Mockery::mock(ServerOrderedLifecycleEventConsumer::class);
-        $orderedConsumer->shouldNotReceive('consume');
-        $this->app->instance(ServerOrderedLifecycleEventConsumer::class, $orderedConsumer);
-
-        $provisionedConsumer = Mockery::mock(ServerProvisionedLifecycleEventConsumer::class);
-        $provisionedConsumer->shouldNotReceive('consume');
-        $this->app->instance(ServerProvisionedLifecycleEventConsumer::class, $provisionedConsumer);
-
         Http::fakeSequence()
             ->push($this->receiveMessageResponseXml('server.unknown', [
                 'event_id' => 'evt-unknown-1',
@@ -106,6 +108,7 @@ class ServerOrderedConsumerTest extends TestCase
         $processed = $consumer->consumeBatch(maxMessages: 1, waitTimeSeconds: 0);
 
         $this->assertSame(0, $processed);
+        $this->assertDatabaseCount('server_events', 0);
     }
 
     /**

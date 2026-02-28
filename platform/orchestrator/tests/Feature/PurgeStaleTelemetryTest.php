@@ -24,13 +24,13 @@ class PurgeStaleTelemetryTest extends TestCase
         TelemetryServer::factory()->create(['server_id' => 'server-boundary', 'node_id' => 'node-boundary']);
         TelemetryServer::factory()->create(['server_id' => 'server-fresh', 'node_id' => 'node-fresh']);
 
-        TelemetryNode::query()->whereKey('node-stale')->update(['updated_at' => $now->copy()->subHours(25)]);
-        TelemetryNode::query()->whereKey('node-boundary')->update(['updated_at' => $now->copy()->subHours(24)]);
-        TelemetryNode::query()->whereKey('node-fresh')->update(['updated_at' => $now->copy()->subHours(1)]);
+        TelemetryNode::query()->where('node_id', 'node-stale')->update(['updated_at' => $now->copy()->subHours(25)]);
+        TelemetryNode::query()->where('node_id', 'node-boundary')->update(['updated_at' => $now->copy()->subHours(24)]);
+        TelemetryNode::query()->where('node_id', 'node-fresh')->update(['updated_at' => $now->copy()->subHours(1)]);
 
-        TelemetryServer::query()->whereKey('server-stale')->update(['updated_at' => $now->copy()->subHours(25)]);
-        TelemetryServer::query()->whereKey('server-boundary')->update(['updated_at' => $now->copy()->subHours(24)]);
-        TelemetryServer::query()->whereKey('server-fresh')->update(['updated_at' => $now->copy()->subHours(1)]);
+        TelemetryServer::query()->where('server_id', 'server-stale')->update(['updated_at' => $now->copy()->subHours(25)]);
+        TelemetryServer::query()->where('server_id', 'server-boundary')->update(['updated_at' => $now->copy()->subHours(24)]);
+        TelemetryServer::query()->where('server_id', 'server-fresh')->update(['updated_at' => $now->copy()->subHours(1)]);
 
         $this->assertDatabaseCount('telemetry_node', 3);
         $this->assertDatabaseCount('telemetry_server', 3);

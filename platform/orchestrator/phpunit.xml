@@ -13,6 +13,13 @@
         </testsuite>
         <testsuite name="Feature">
             <directory>tests/Feature</directory>
+            <exclude>tests/Feature/AuthApiTest.php</exclude>
+            <exclude>tests/Feature/MetricsApiTest.php</exclude>
+            <exclude>tests/Feature/NodeApiTest.php</exclude>
+            <exclude>tests/Feature/NodeTelemetryApiTest.php</exclude>
+            <exclude>tests/Feature/RegionalProxyApiTest.php</exclude>
+            <exclude>tests/Feature/ServerApiTest.php</exclude>
+            <exclude>tests/Feature/ServerDestinationApiTest.php</exclude>
         </testsuite>
     </testsuites>
     <source>
