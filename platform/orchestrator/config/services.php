@@ -45,6 +45,9 @@ return [
         'bootstrap_ttl_minutes' => (int) env('PROVISIONING_BOOTSTRAP_TTL_MINUTES', 20),
         'bootstrap_max_ttl_minutes' => (int) env('PROVISIONING_BOOTSTRAP_MAX_TTL_MINUTES', 120),
         'orchestrator_base_url' => env('PROVISIONING_ORCHESTRATOR_BASE_URL'),
+        'monitor_archive_url' => env('PROVISIONING_MONITOR_ARCHIVE_URL'),
+        'monitor_archive_sha256' => env('PROVISIONING_MONITOR_ARCHIVE_SHA256'),
+        'monitor_archive_entrypoint' => env('PROVISIONING_MONITOR_ARCHIVE_ENTRYPOINT', 'main.py'),
         'monitor_script_url' => env('PROVISIONING_MONITOR_SCRIPT_URL'),
         'monitor_script_path' => env('PROVISIONING_MONITOR_SCRIPT_PATH'),
         'wings_binary_url_template' => env(

@@ -69,6 +69,8 @@ class NodeProvisioningController extends Controller
             'wings_configuration' => $wingsConfiguration,
             'monitor_installer_type' => $monitorInstaller['type'],
             'monitor_installer_value' => $monitorInstaller['value'],
+            'monitor_installer_checksum' => $monitorInstaller['checksum'] ?? null,
+            'monitor_installer_entrypoint' => $monitorInstaller['entrypoint'] ?? null,
             'wings_binary_url_amd64' => $wingsBinaryUrlAmd64,
             'wings_binary_url_arm64' => $wingsBinaryUrlArm64,
         ], $expiresAt);
@@ -161,10 +163,29 @@ class NodeProvisioningController extends Controller
     }
 
     /**
-     * @return array{type: string, value: string}
+     * @return array{
+     *   type: string,
+     *   value: string,
+     *   checksum?: string|null,
+     *   entrypoint?: string|null
+     * }
      */
     private function resolveMonitorInstaller(): array
     {
+        $monitorArchiveUrl = trim((string) config('services.provisioning.monitor_archive_url', ''));
+
+        if ($monitorArchiveUrl !== '') {
+            $archiveEntrypoint = trim((string) config('services.provisioning.monitor_archive_entrypoint', 'main.py'));
+            $archiveChecksum = trim((string) config('services.provisioning.monitor_archive_sha256', ''));
+
+            return [
+                'type' => 'archive_url',
+                'value' => $monitorArchiveUrl,
+                'checksum' => $archiveChecksum !== '' ? $archiveChecksum : null,
+                'entrypoint' => $archiveEntrypoint !== '' ? $archiveEntrypoint : 'main.py',
+            ];
+        }
+
         $monitorScriptUrl = trim((string) config('services.provisioning.monitor_script_url', ''));
 
         if ($monitorScriptUrl !== '') {
@@ -192,7 +213,8 @@ class NodeProvisioningController extends Controller
         }
 
         throw new RuntimeException(
-            'No monitor installer source is configured. Set PROVISIONING_MONITOR_SCRIPT_URL '
+            'No monitor installer source is configured. Set PROVISIONING_MONITOR_ARCHIVE_URL, '
+            .'PROVISIONING_MONITOR_SCRIPT_URL '
             .'or PROVISIONING_MONITOR_SCRIPT_PATH.'
         );
     }
@@ -274,6 +296,12 @@ class NodeProvisioningController extends Controller
         $wingsConfiguration = $payload['wings_configuration'] ?? null;
         $monitorInstallerType = trim((string) ($payload['monitor_installer_type'] ?? ''));
         $monitorInstallerValue = (string) ($payload['monitor_installer_value'] ?? '');
+        $monitorInstallerChecksum = is_string($payload['monitor_installer_checksum'] ?? null)
+            ? trim((string) $payload['monitor_installer_checksum'])
+            : null;
+        $monitorInstallerEntrypoint = is_string($payload['monitor_installer_entrypoint'] ?? null)
+            ? trim((string) $payload['monitor_installer_entrypoint'])
+            : null;
         $wingsBinaryUrlAmd64 = trim((string) ($payload['wings_binary_url_amd64'] ?? ''));
         $wingsBinaryUrlArm64 = trim((string) ($payload['wings_binary_url_arm64'] ?? ''));
 
@@ -297,7 +325,9 @@ class NodeProvisioningController extends Controller
 
         $monitorInstallBlock = $this->buildMonitorInstallBlock(
             $monitorInstallerType,
-            $monitorInstallerValue
+            $monitorInstallerValue,
+            $monitorInstallerChecksum,
+            $monitorInstallerEntrypoint
         );
 
         $renderedScript = view('provisioning.bootstrap-script', [
@@ -314,8 +344,60 @@ class NodeProvisioningController extends Controller
         return ltrim($renderedScript, "\n");
     }
 
-    private function buildMonitorInstallBlock(string $installerType, string $installerValue): string
+    private function buildMonitorInstallBlock(
+        string $installerType,
+        string $installerValue,
+        ?string $installerChecksum = null,
+        ?string $installerEntrypoint = null
+    ): string
     {
+        if ($installerType === 'archive_url') {
+            $url = trim($installerValue);
+
+            if ($url === '') {
+                throw new RuntimeException('Monitor installer archive URL is empty.');
+            }
+
+            $entrypoint = trim((string) $installerEntrypoint);
+
+            if ($entrypoint === '') {
+                $entrypoint = 'main.py';
+            }
+
+            $checksumValidationStep = '';
+            $checksum = trim((string) $installerChecksum);
+
+            if ($checksum !== '') {
+                $checksumValidationStep = sprintf(
+                    "echo '%s  /tmp/orchestrator-monitor.zip' | sha256sum -c -\n",
+                    $this->shellSingleQuote($checksum)
+                );
+            }
+
+            return sprintf(
+                "log \"Downloading orchestrator monitor archive...\"\n"
+                ."if ! command -v unzip >/dev/null 2>&1; then\n"
+                ."  apt-get update -y\n"
+                ."  apt-get install -y unzip\n"
+                ."fi\n"
+                ."curl -fsSL '%s' -o /tmp/orchestrator-monitor.zip\n"
+                ."%s"
+                ."rm -rf /opt/intera/orchestrator-monitor/.artifact\n"
+                ."install -d -m 0755 /opt/intera/orchestrator-monitor/.artifact\n"
+                ."unzip -qo /tmp/orchestrator-monitor.zip -d /opt/intera/orchestrator-monitor/.artifact\n"
+                ."if [[ ! -f /opt/intera/orchestrator-monitor/.artifact/'%s' ]]; then\n"
+                ."  echo \"Monitor archive is missing the configured entrypoint.\" >&2\n"
+                ."  exit 1\n"
+                ."fi\n"
+                ."cp /opt/intera/orchestrator-monitor/.artifact/'%s' /opt/intera/orchestrator-monitor/main.py\n"
+                ."rm -f /tmp/orchestrator-monitor.zip",
+                $this->shellSingleQuote($url),
+                $checksumValidationStep,
+                $this->shellSingleQuote($entrypoint),
+                $this->shellSingleQuote($entrypoint)
+            );
+        }
+
         if ($installerType === 'url') {
             $url = trim($installerValue);
 
