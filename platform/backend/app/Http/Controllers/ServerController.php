@@ -5,8 +5,15 @@ declare(strict_types=1);
 namespace App\Http\Controllers;
 
 use App\Services\PterodactylPanelLinkService;
+use App\Services\Stripe\Services\StripeCheckoutSessionService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Str;
+use Interadigital\CoreModels\Enums\ServerStatus;
+use Interadigital\CoreModels\Models\Server;
+use Interadigital\CoreModels\Models\User;
+use InvalidArgumentException;
+use Throwable;
 
 class ServerController extends Controller
 {
@@ -72,6 +79,209 @@ class ServerController extends Controller
         return response()->json([
             'panel_url' => $panelUrl,
         ]);
+    }
+
+    /**
+     * Return purchase/provisioning status for a server owned by the current user.
+     */
+    public function provisioningStatus(
+        Request $request,
+        string $uuid,
+        PterodactylPanelLinkService $panelLinkService
+    ): JsonResponse {
+        $user = $request->user();
+        $server = $user->servers()->where('uuid', $uuid)->firstOrFail();
+
+        $paymentConfirmed = (bool) $server->stripe_tx_return;
+        $initialised = (bool) $server->initialised;
+        $isProvisioned = $paymentConfirmed && $initialised;
+        $stage = ! $paymentConfirmed
+            ? 'pending'
+            : ($initialised ? 'provisioned' : 'provisioning');
+
+        $panelUrl = null;
+        if ($isProvisioned) {
+            $panelUrl = $panelLinkService->resolvePanelUrl($server);
+        }
+
+        return response()->json([
+            'server_uuid' => (string) $server->uuid,
+            'status' => (string) $server->status,
+            'payment_confirmed' => $paymentConfirmed,
+            'initialised' => $initialised,
+            'provisioned' => $isProvisioned,
+            'stage' => $stage,
+            'panel_url' => $panelUrl,
+        ]);
+    }
+
+    /**
+     * Confirm the checkout return token and attach Stripe subscription to server.
+     */
+    public function confirmPurchaseReturn(
+        Request $request,
+        string $uuid,
+        StripeCheckoutSessionService $stripeCheckoutSessionService
+    ): JsonResponse {
+        $user = $request->user();
+        $server = $user->servers()->where('uuid', $uuid)->firstOrFail();
+
+        $validated = $request->validate([
+            'session_id' => ['required', 'string', 'max:255'],
+        ]);
+
+        try {
+            $checkoutSession = $stripeCheckoutSessionService->retrieveCheckoutSession(
+                (string) $validated['session_id']
+            );
+        } catch (Throwable $exception) {
+            report($exception);
+
+            return response()->json([
+                'message' => 'Unable to verify checkout session.',
+            ], 502);
+        }
+
+        $metadataServerUuid = is_object($checkoutSession->metadata ?? null)
+            ? ($checkoutSession->metadata->server_uuid ?? null)
+            : null;
+
+        if (is_string($metadataServerUuid) && $metadataServerUuid !== '' && $metadataServerUuid !== $server->uuid) {
+            return response()->json([
+                'message' => 'Checkout session does not match this server.',
+            ], 422);
+        }
+
+        $subscriptionId = $checkoutSession->subscription ?? null;
+        if (is_object($subscriptionId) && isset($subscriptionId->id) && is_string($subscriptionId->id)) {
+            $subscriptionId = $subscriptionId->id;
+        }
+
+        if (! is_string($subscriptionId) || $subscriptionId === '') {
+            return response()->json([
+                'message' => 'Checkout session does not contain a subscription yet.',
+            ], 422);
+        }
+
+        $server->stripe_tx_id = $subscriptionId;
+        $server->save();
+
+        return response()->json([
+            'server_uuid' => (string) $server->uuid,
+            'stripe_subscription_id' => $subscriptionId,
+            'checkout_status' => (string) ($checkoutSession->status ?? ''),
+            'payment_status' => (string) ($checkoutSession->payment_status ?? ''),
+        ]);
+    }
+
+    /**
+     * Create a server record in pending-payment state, then open Stripe checkout.
+     */
+    public function purchase(
+        Request $request,
+        StripeCheckoutSessionService $stripeCheckoutSessionService
+    ): JsonResponse {
+        $user = $request->user();
+        if (! $user instanceof User) {
+            return response()->json([
+                'message' => 'Unauthorized.',
+            ], 401);
+        }
+
+        $validated = $request->validate([
+            'plan' => ['required', 'string'],
+            'name' => ['nullable', 'string', 'max:64'],
+            'location' => ['required', 'string'],
+            'minecraft_version' => ['required', 'string', 'max:64'],
+            'type' => ['required', 'string', 'max:64'],
+            'type_version' => ['nullable', 'string', 'max:128'],
+        ]);
+
+        $planName = strtolower(trim((string) $validated['plan']));
+        $plansByName = collect(config('plans.planList', []))
+            ->filter(fn (mixed $plan): bool => is_array($plan) && isset($plan['name']))
+            ->keyBy(fn (array $plan): string => strtolower((string) $plan['name']));
+
+        /** @var array<string, mixed>|null $plan */
+        $plan = $plansByName->get($planName);
+        if ($plan === null) {
+            return response()->json([
+                'message' => 'Selected plan is invalid.',
+            ], 422);
+        }
+
+        $location = (string) $validated['location'];
+        $planLocations = is_array($plan['locations'] ?? null) ? $plan['locations'] : [];
+        if (! in_array($location, $planLocations, true)) {
+            return response()->json([
+                'message' => 'Selected location is invalid for this plan.',
+            ], 422);
+        }
+
+        $serverConfig = [
+            'name' => trim((string) ($validated['name'] ?? '')) !== ''
+                ? trim((string) $validated['name'])
+                : 'My Server',
+            'location' => $location,
+            'minecraft_version' => (string) $validated['minecraft_version'],
+            'type' => (string) $validated['type'],
+            'type_version' => $validated['type_version'] ?? null,
+        ];
+
+        $server = Server::query()->create([
+            'stripe_tx_id' => null,
+            'config' => json_encode($serverConfig),
+            'plan' => (string) $plan['name'],
+            'uuid' => (string) Str::uuid(),
+            'initialised' => false,
+            'stripe_tx_return' => false,
+            'user_id' => (int) $user->id,
+            'suspended' => false,
+            'status' => ServerStatus::NEW->value,
+        ]);
+
+        $completeBaseUrl = rtrim((string) config('stripe.checkout_complete_base_url'), '/');
+        $successUrl = $completeBaseUrl.'/'.(string) $server->uuid.'?session_id={CHECKOUT_SESSION_ID}';
+
+        try {
+            $checkoutSession = $stripeCheckoutSessionService->createSubscriptionCheckoutSession(
+                $user,
+                (string) $plan['name'],
+                $successUrl,
+                null,
+                null,
+                [
+                    'server_uuid' => (string) $server->uuid,
+                ]
+            );
+        } catch (InvalidArgumentException $exception) {
+            $server->delete();
+
+            return response()->json([
+                'message' => $exception->getMessage(),
+            ], 422);
+        } catch (Throwable $exception) {
+            report($exception);
+            $server->delete();
+
+            return response()->json([
+                'message' => 'Unable to start checkout session.',
+            ], 502);
+        }
+
+        $checkoutUrl = is_string($checkoutSession->url ?? null) ? $checkoutSession->url : '';
+        if ($checkoutUrl === '') {
+            $server->delete();
+
+            return response()->json([
+                'message' => 'Checkout URL is missing from Stripe response.',
+            ], 502);
+        }
+
+        return response()->json([
+            'server_uuid' => (string) $server->uuid,
+            'checkout_url' => $checkoutUrl,
+        ], 201);
     }
 }
 

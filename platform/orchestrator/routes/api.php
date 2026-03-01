@@ -3,6 +3,7 @@
 use App\Http\Controllers\AdminAuthController;
 use App\Http\Controllers\BannerController;
 use App\Http\Controllers\FaqController;
+use App\Http\Controllers\LocationsCacheController;
 use App\Http\Controllers\MetricsController;
 use App\Http\Controllers\NodeController;
 use App\Http\Controllers\NodeTelemetryController;
@@ -48,6 +49,8 @@ Route::middleware(['auth.jwt', 'admin'])->group(function (): void {
     Route::get('/metrics', [MetricsController::class, 'index']);
     Route::get('/users', [UserController::class, 'index']);
     Route::get('/users/{id}', [UserController::class, 'show']);
+    Route::get('/locations/cache', [LocationsCacheController::class, 'index']);
+    Route::get('/locations/cache/raw', [LocationsCacheController::class, 'raw']);
 });
 
 Route::get('/banner', [BannerController::class, 'index']);

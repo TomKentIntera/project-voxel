@@ -6,6 +6,7 @@ use App\Http\Controllers\BillingController;
 use App\Http\Controllers\FaqController;
 use App\Http\Controllers\PlanController;
 use App\Http\Controllers\ServerController;
+use App\Http\Controllers\StripeWebhookController;
 use Illuminate\Support\Facades\Route;
 
 Route::prefix('auth')->group(function (): void {
@@ -18,6 +19,9 @@ Route::prefix('auth')->group(function (): void {
 
 Route::middleware('auth.jwt')->group(function (): void {
     Route::get('/servers', [ServerController::class, 'index']);
+    Route::post('/servers/purchase', [ServerController::class, 'purchase']);
+    Route::post('/servers/{uuid}/purchase-confirmation', [ServerController::class, 'confirmPurchaseReturn']);
+    Route::get('/servers/{uuid}/provisioning-status', [ServerController::class, 'provisioningStatus']);
     Route::get('/servers/{uuid}/panel-url', [ServerController::class, 'panelUrl']);
     Route::post('/billing/portal-session', [BillingController::class, 'portalSession']);
 });
@@ -26,3 +30,4 @@ Route::get('/banner', [BannerController::class, 'index']);
 Route::get('/plans', [PlanController::class, 'index']);
 Route::get('/plans/recommend', [PlanController::class, 'recommend']);
 Route::get('/faqs', [FaqController::class, 'index']);
+Route::post('/webhooks/stripe', [StripeWebhookController::class, 'handle']);

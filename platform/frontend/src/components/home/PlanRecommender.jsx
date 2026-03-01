@@ -1,3 +1,4 @@
+import { Link } from 'react-router-dom'
 import { useState, useCallback } from 'react'
 import { usePlans } from '../../hooks/usePlans'
 import { apiRequest } from '../../utils/apiClient'
@@ -92,12 +93,12 @@ export default function PlanRecommender({ showHeaderBg = false }) {
                         {price}/month
                       </p>
                       <div className="buttons">
-                        <a
-                          href={`/plan/configure/${recommended.name}`}
+                        <Link
+                          to={`/plan/configure/${recommended.name}`}
                           className="btn btn-green btn-medium btn-90"
                         >
                           Configure
-                        </a>
+                        </Link>
                       </div>
                     </>
                   )}

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Services;
 
 use Illuminate\Contracts\Cache\Repository as CacheRepository;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use Throwable;
 
@@ -67,23 +68,24 @@ class LocationsCacheReader
     {
         $cacheTtlSeconds = max(1, (int) config('services.locations_cache.ttl_seconds', 60));
         $cacheKey = $this->payloadCacheKey();
+        $freshPayload = $this->readPayloadFromStorage();
+        if ($freshPayload !== []) {
+            $this->cache->put($cacheKey, $freshPayload, now()->addSeconds($cacheTtlSeconds));
 
+            return $freshPayload;
+        }
+
+        // Storage can be temporarily unavailable. Fall back to the last known
+        // non-empty payload so plans/availability remain stable.
         $cached = $this->cache->get($cacheKey);
         if (is_array($cached) && $cached !== []) {
             return $cached;
         }
 
-        $freshPayload = $this->readPayloadFromStorage();
-        if ($freshPayload === []) {
-            // Do not cache empty payloads; we want to recover quickly once data appears in MinIO.
-            $this->cache->forget($cacheKey);
+        // Do not cache empty payloads; we want to recover quickly once data appears in shared storage.
+        $this->cache->forget($cacheKey);
 
-            return [];
-        }
-
-        $this->cache->put($cacheKey, $freshPayload, now()->addSeconds($cacheTtlSeconds));
-
-        return $freshPayload;
+        return [];
     }
 
     public function forgetCachedPayload(): void
@@ -111,7 +113,14 @@ class LocationsCacheReader
             }
 
             $decoded = json_decode((string) $storage->get($path), true);
-        } catch (Throwable) {
+        } catch (Throwable $exception) {
+            Log::warning('Failed to read locations cache payload.', [
+                'disk' => $disk,
+                'path' => $path,
+                'exception' => $exception::class,
+                'message' => $exception->getMessage(),
+            ]);
+
             return [];
         }
 

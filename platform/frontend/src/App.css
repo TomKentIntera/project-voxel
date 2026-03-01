@@ -62,3 +62,12 @@
 .auth-loading {
   color: #475569;
 }
+
+.initialize-card {
+  margin-top: 60px;
+  padding: 30px 32px;
+  border-radius: 12px;
+  background: rgba(19, 26, 46, 0.9);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.35);
+}

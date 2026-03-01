@@ -89,6 +89,14 @@ class ServerOrderedConsumer
         ]);
 
         if (! $response->successful()) {
+            if ($this->isNonExistentQueueResponse($response)) {
+                Log::warning('Skipping server ordered consume batch because the SQS queue does not exist.', [
+                    'queue_url' => $queueUrl,
+                ]);
+
+                return [];
+            }
+
             throw new RuntimeException(sprintf(
                 'SQS ReceiveMessage failed with HTTP %d: %s',
                 $response->status(),
@@ -258,5 +266,17 @@ class ServerOrderedConsumer
         $token = trim((string) config('services.event_bus.session_token', ''));
 
         return $token === '' ? null : $token;
+    }
+
+    private function isNonExistentQueueResponse(Response $response): bool
+    {
+        if ($response->status() !== 400) {
+            return false;
+        }
+
+        $body = $response->body();
+
+        return str_contains($body, 'AWS.SimpleQueueService.NonExistentQueue')
+            || str_contains($body, '<Code>NonExistentQueue</Code>');
     }
 }

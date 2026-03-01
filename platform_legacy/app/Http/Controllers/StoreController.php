@@ -161,6 +161,23 @@ class StoreController extends BaseController
             $minecraftVersions[] = ["title" => $v->name, "id" => $v->name];
         }
 
+        // Legacy environments can have an empty CurseGameVersion table.
+        // Provide a sensible fallback so users can still complete checkout.
+        if (count($minecraftVersions) === 0) {
+            $fallbackVersions = [
+                '1.21.4',
+                '1.21.1',
+                '1.20.6',
+                '1.20.4',
+                '1.19.4',
+                '1.18.2',
+            ];
+
+            foreach ($fallbackVersions as $version) {
+                $minecraftVersions[] = ["title" => $version, "id" => $version];
+            }
+        }
+
         // parse location data too
         // this is used to disable locations with insufficient memory
         $locations = [

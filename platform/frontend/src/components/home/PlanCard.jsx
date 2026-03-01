@@ -1,7 +1,16 @@
+import { Link } from 'react-router-dom'
 import { usePlans } from '../../hooks/usePlans'
+import { OPEN_NOTIFICATION_FORM_EVENT } from './noAvailabilityForm'
 
 export default function PlanCard({ plan, modId = null }) {
   const { locations, currencySymbol, getPlanPrice } = usePlans()
+  const openNotificationForm = () => {
+    window.dispatchEvent(
+      new CustomEvent(OPEN_NOTIFICATION_FORM_EVENT, {
+        detail: { plan: plan.title },
+      }),
+    )
+  }
 
   const availability = plan.availability ?? {}
   const hasAvailableLocation = plan.locations.some(
@@ -64,8 +73,8 @@ export default function PlanCard({ plan, modId = null }) {
 
           <div className="buttons">
             {hasAvailableLocation ? (
-              <a
-                href={
+              <Link
+                to={
                   modId
                     ? `/plan/configure/${plan.name}/mod/${modId}`
                     : `/plan/configure/${plan.name}`
@@ -73,14 +82,15 @@ export default function PlanCard({ plan, modId = null }) {
                 className="btn btn-green btn-medium btn-90"
               >
                 Configure
-              </a>
+              </Link>
             ) : (
-              <a
+              <button
+                type="button"
                 className="btn btn-blue btn-medium btn-90 notification_open"
-                data-plan={plan.title}
+                onClick={openNotificationForm}
               >
                 Get Notified
-              </a>
+              </button>
             )}
           </div>
         </div>

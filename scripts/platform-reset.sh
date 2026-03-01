@@ -237,6 +237,56 @@ refresh_store_node_capacity() {
     orchestrator php artisan pterodactyl:update-location-free-space --no-interaction
 }
 
+sync_wings_config_from_panel_node() {
+  if [ "$with_wings" != "true" ]; then
+    return 0
+  fi
+
+  config_path="$ROOT_DIR/docker/wings/config.yml"
+  if [ ! -f "$config_path" ]; then
+    echo "Wings config file not found at $config_path" >&2
+    return 1
+  fi
+
+  node_credentials="$(docker compose exec -T mysql mysql -N -B -uroot -psecret pterodactyl -e "SELECT uuid, daemon_token_id, daemon_token FROM nodes WHERE fqdn='pterodactyl-wings' ORDER BY id ASC LIMIT 1;" || true)"
+
+  if [ -z "$node_credentials" ]; then
+    echo "Could not find pterodactyl-wings node credentials in Panel database." >&2
+    return 1
+  fi
+
+  wings_uuid="$(printf '%s\n' "$node_credentials" | awk -F '\t' '{print $1}')"
+  wings_token_id="$(printf '%s\n' "$node_credentials" | awk -F '\t' '{print $2}')"
+  wings_token="$(printf '%s\n' "$node_credentials" | awk -F '\t' '{print $3}')"
+
+  if [ -z "$wings_uuid" ] || [ -z "$wings_token_id" ] || [ -z "$wings_token" ]; then
+    echo "Incomplete Wings node credentials returned from Panel database." >&2
+    return 1
+  fi
+
+  temp_config="$(mktemp)"
+  awk \
+    -v wings_uuid="$wings_uuid" \
+    -v wings_token_id="$wings_token_id" \
+    -v wings_token="$wings_token" '
+      /^uuid:/ { print "uuid: " wings_uuid; next }
+      /^token_id:/ { print "token_id: " wings_token_id; next }
+      /^token:/ { print "token: " wings_token; next }
+      { print }
+    ' "$config_path" > "$temp_config"
+
+  mv "$temp_config" "$config_path"
+  echo "Updated docker/wings/config.yml with Panel node credentials."
+}
+
+restart_wings() {
+  if [ "$with_wings" != "true" ]; then
+    return 0
+  fi
+
+  docker compose --profile testing up -d --force-recreate pterodactyl-wings
+}
+
 start_required_services
 wait_for_mysql_ready
 wait_for_php_service_port backend 8000
@@ -252,6 +302,8 @@ ensure_pterodactyl_database
 run_migrations
 run_pterodactyl_provisioning
 refresh_store_node_capacity
+sync_wings_config_from_panel_node
+restart_wings
 
 if [ "$rebuild" = "true" ]; then
   echo "Platform reset complete (with full container rebuild)."

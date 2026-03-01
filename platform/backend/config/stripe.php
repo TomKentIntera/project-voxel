@@ -15,6 +15,11 @@ return [
             .'/billing/success?session_id={CHECKOUT_SESSION_ID}'
     ),
 
+    'checkout_complete_base_url' => env(
+        'STRIPE_CHECKOUT_COMPLETE_BASE_URL',
+        rtrim((string) env('FRONTEND_URL', 'http://localhost'), '/').'/billing/complete'
+    ),
+
     'checkout_cancel_url' => env(
         'STRIPE_CHECKOUT_CANCEL_URL',
         rtrim((string) env('FRONTEND_URL', 'http://localhost'), '/').'/billing/cancel'

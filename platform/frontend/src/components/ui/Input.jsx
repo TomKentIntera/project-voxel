@@ -5,14 +5,22 @@
  * @param {string}  props.label        – Visible label text
  * @param {string}  [props.id]         – Input id (also used for htmlFor)
  * @param {string}  [props.type]       – Input type (text, email, password, …)
+ * @param {string}  [props.labelClassName='ui-label'] – Label class override
  * @param {string}  [props.className]  – Extra class on the wrapper
  * @param {object}  rest               – Forwarded to the <input> element
  */
-export default function Input({ label, id, type = 'text', className = '', ...rest }) {
+export default function Input({
+  label,
+  id,
+  type = 'text',
+  labelClassName = 'ui-label',
+  className = '',
+  ...rest
+}) {
   return (
     <div className={`ui-field ${className}`.trim()}>
       {label && (
-        <label className="ui-label" htmlFor={id}>
+        <label className={labelClassName} htmlFor={id}>
           {label}
         </label>
       )}

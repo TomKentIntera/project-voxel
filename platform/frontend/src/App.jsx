@@ -6,7 +6,10 @@ import DashboardPage from './pages/DashboardPage'
 import HomePage from './pages/HomePage'
 import LoginPage from './pages/LoginPage'
 import RegisterPage from './pages/RegisterPage'
+import BillingCompletePage from './pages/BillingCompletePage'
+import InitializePage from './pages/InitializePage'
 import PlansPage from './pages/PlansPage'
+import PlanConfigurePage from './pages/PlanConfigurePage'
 import ModpackPage from './pages/ModpackPage'
 import FaqsPage from './pages/FaqsPage'
 import TermsPage from './pages/TermsPage'
@@ -27,11 +30,43 @@ function App() {
       <Routes>
         <Route path="/" element={<HomePage />} />
         <Route path="/plans" element={<PlansPage />} />
+        <Route
+          path="/plan/configure/:planName"
+          element={
+            <ProtectedRoute>
+              <PlanConfigurePage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/plan/configure/:planName/mod/:modId"
+          element={
+            <ProtectedRoute>
+              <PlanConfigurePage />
+            </ProtectedRoute>
+          }
+        />
         <Route path="/modpack/:slug" element={<ModpackPage />} />
         <Route path="/vaulthunters" element={<Navigate to="/modpack/vaulthunters" replace />} />
         <Route path="/faqs" element={<FaqsPage />} />
         <Route path="/terms" element={<TermsPage />} />
         <Route path="/privacy-policy" element={<PrivacyPolicyPage />} />
+        <Route
+          path="/billing/complete/:serverUuid"
+          element={
+            <ProtectedRoute>
+              <BillingCompletePage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/initialize/:serverUuid"
+          element={
+            <ProtectedRoute>
+              <InitializePage />
+            </ProtectedRoute>
+          }
+        />
         <Route
           path="/dashboard"
           element={

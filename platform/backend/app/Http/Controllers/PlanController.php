@@ -45,32 +45,20 @@ class PlanController extends Controller
             ];
         })->values()->all();
 
-        $configLocationsByPteroShort = collect(config('plans.locations'))
-            ->mapWithKeys(function (array $location, string $key): array {
-                $pteroShortCode = trim((string) ($location['ptero_location'] ?? ''));
+        $cachedLocationsByShort = collect($cachedLocations)->keyBy('short');
 
-                if ($pteroShortCode === '') {
-                    return [];
-                }
-
-                return [$pteroShortCode => [
-                    'key' => $key,
-                    'title' => $location['title'] ?? $pteroShortCode,
-                    'flag' => $location['flag'] ?? '',
-                ]];
-            });
-
-        $locations = collect($cachedLocations)->map(
-            function (array $location) use ($configLocationsByPteroShort): array {
-                $configLocation = $configLocationsByPteroShort->get($location['short'], []);
+        $locations = collect(config('plans.locations'))->map(
+            function (array $location, string $key) use ($cachedLocationsByShort): array {
+                $shortCode = trim((string) ($location['ptero_location'] ?? ''));
+                $cached = $shortCode !== '' ? $cachedLocationsByShort->get($shortCode) : null;
 
                 return [
-                    'short' => $location['short'],
-                    'long' => $location['long'],
-                    'maxFreeMemory' => $location['maxFreeMemory'],
-                    'key' => $configLocation['key'] ?? $location['short'],
-                    'title' => $configLocation['title'] ?? ($location['long'] !== '' ? $location['long'] : $location['short']),
-                    'flag' => $configLocation['flag'] ?? '',
+                    'key' => $key,
+                    'title' => $location['title'] ?? $key,
+                    'flag' => $location['flag'] ?? '',
+                    'short' => $shortCode !== '' ? $shortCode : null,
+                    'long' => is_array($cached) ? ($cached['long'] ?? '') : '',
+                    'maxFreeMemory' => is_array($cached) ? (int) ($cached['maxFreeMemory'] ?? 0) : 0,
                 ];
             }
         )->values()->all();

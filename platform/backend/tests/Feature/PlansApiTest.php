@@ -43,6 +43,11 @@ class PlansApiTest extends TestCase
                 'flag' => 'de',
                 'ptero_location' => 'eu.de',
             ],
+            'fi' => [
+                'title' => 'Finland',
+                'flag' => 'fi',
+                'ptero_location' => 'eu.fi',
+            ],
         ]);
 
         Storage::disk('locations_cache')->put('locations.json', json_encode([
@@ -66,7 +71,11 @@ class PlansApiTest extends TestCase
             ->assertJsonPath('locations.0.maxFreeMemory', 8192)
             ->assertJsonPath('locations.0.key', 'de')
             ->assertJsonPath('locations.0.title', 'Germany')
-            ->assertJsonPath('locations.0.flag', 'de');
+            ->assertJsonPath('locations.0.flag', 'de')
+            ->assertJsonPath('locations.1.key', 'fi')
+            ->assertJsonPath('locations.1.flag', 'fi')
+            ->assertJsonPath('locations.1.short', 'eu.fi')
+            ->assertJsonPath('locations.1.maxFreeMemory', 0);
     }
 }
 

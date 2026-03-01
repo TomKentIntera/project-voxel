@@ -6,6 +6,7 @@ namespace App\Console\Commands;
 
 use App\Services\EventBus\ServerOrderedConsumer;
 use Illuminate\Console\Command;
+use Throwable;
 
 class ConsumeServerOrderedEventsCommand extends Command
 {
@@ -25,7 +26,19 @@ class ConsumeServerOrderedEventsCommand extends Command
         $sleepSeconds = max(0, (int) $this->option('sleep'));
 
         do {
-            $processed = $consumer->consumeBatch($maxMessages, $waitSeconds);
+            try {
+                $processed = $consumer->consumeBatch($maxMessages, $waitSeconds);
+            } catch (Throwable $exception) {
+                $this->error('Server ordered consumer poll failed: '.$exception->getMessage());
+
+                if ($once) {
+                    return self::FAILURE;
+                }
+
+                sleep(max(1, $sleepSeconds));
+
+                continue;
+            }
 
             if ($processed > 0) {
                 $this->info(sprintf('Processed %d server lifecycle event(s).', $processed));

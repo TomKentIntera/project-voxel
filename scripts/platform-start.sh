@@ -63,6 +63,49 @@ start_stack() {
   fi
 }
 
+sync_wings_config_from_panel_node_if_available() {
+  if [ "$with_wings" != "true" ]; then
+    return 0
+  fi
+
+  config_path="$ROOT_DIR/docker/wings/config.yml"
+  if [ ! -f "$config_path" ]; then
+    echo "Wings config file not found at $config_path" >&2
+    return 0
+  fi
+
+  node_credentials="$(docker compose exec -T mysql mysql -N -B -uroot -psecret pterodactyl -e "SELECT uuid, daemon_token_id, daemon_token FROM nodes WHERE fqdn='pterodactyl-wings' ORDER BY id ASC LIMIT 1;" 2>/dev/null || true)"
+
+  if [ -z "$node_credentials" ]; then
+    echo "No pterodactyl-wings node credentials found yet; leaving existing Wings config as-is."
+    return 0
+  fi
+
+  wings_uuid="$(printf '%s\n' "$node_credentials" | awk -F '\t' '{print $1}')"
+  wings_token_id="$(printf '%s\n' "$node_credentials" | awk -F '\t' '{print $2}')"
+  wings_token="$(printf '%s\n' "$node_credentials" | awk -F '\t' '{print $3}')"
+
+  if [ -z "$wings_uuid" ] || [ -z "$wings_token_id" ] || [ -z "$wings_token" ]; then
+    echo "Incomplete Wings node credentials found; leaving existing Wings config as-is." >&2
+    return 0
+  fi
+
+  temp_config="$(mktemp)"
+  awk \
+    -v wings_uuid="$wings_uuid" \
+    -v wings_token_id="$wings_token_id" \
+    -v wings_token="$wings_token" '
+      /^uuid:/ { print "uuid: " wings_uuid; next }
+      /^token_id:/ { print "token_id: " wings_token_id; next }
+      /^token:/ { print "token: " wings_token; next }
+      { print }
+    ' "$config_path" > "$temp_config"
+
+  mv "$temp_config" "$config_path"
+  docker compose --profile testing up -d --force-recreate pterodactyl-wings
+  echo "Updated docker/wings/config.yml and restarted pterodactyl-wings with current Panel credentials."
+}
+
 start_infra
 
 wait_for_mysql_ready() {
@@ -153,6 +196,7 @@ else
 fi
 
 start_stack
+sync_wings_config_from_panel_node_if_available
 
 echo "Platform stack started."
 echo "Frontend:  http://store.localhost"

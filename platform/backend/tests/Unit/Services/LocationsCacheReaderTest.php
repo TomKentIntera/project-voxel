@@ -44,7 +44,7 @@ class LocationsCacheReaderTest extends TestCase
         ], $map);
     }
 
-    public function test_it_returns_cached_value_until_ttl_expires(): void
+    public function test_it_prefers_fresh_shared_storage_value_over_cached_value(): void
     {
         Storage::disk('locations_cache')->put('locations.json', json_encode([
             'locations' => [
@@ -64,7 +64,7 @@ class LocationsCacheReaderTest extends TestCase
         ], JSON_THROW_ON_ERROR));
 
         $second = $reader->maxFreeMemoryByLocationShortCode();
-        $this->assertSame(['eu.de' => 1024], $second);
+        $this->assertSame(['eu.de' => 8192], $second);
     }
 
     public function test_forget_cached_payload_invalidates_cached_value(): void
@@ -90,6 +90,25 @@ class LocationsCacheReaderTest extends TestCase
 
         $second = $reader->maxFreeMemoryByLocationShortCode();
         $this->assertSame(['eu.de' => 8192], $second);
+    }
+
+    public function test_it_falls_back_to_cached_value_when_shared_storage_is_unavailable(): void
+    {
+        Storage::disk('locations_cache')->put('locations.json', json_encode([
+            'locations' => [
+                ['short' => 'eu.de', 'maxFreeMemory' => 1024],
+            ],
+        ], JSON_THROW_ON_ERROR));
+
+        $reader = app(LocationsCacheReader::class);
+
+        $first = $reader->maxFreeMemoryByLocationShortCode();
+        $this->assertSame(['eu.de' => 1024], $first);
+
+        Storage::disk('locations_cache')->delete('locations.json');
+
+        $second = $reader->maxFreeMemoryByLocationShortCode();
+        $this->assertSame(['eu.de' => 1024], $second);
     }
 
     public function test_it_normalizes_storage_app_path_for_shared_storage_key(): void

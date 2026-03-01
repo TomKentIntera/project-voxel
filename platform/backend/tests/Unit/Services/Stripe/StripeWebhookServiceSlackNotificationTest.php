@@ -60,4 +60,34 @@ class StripeWebhookServiceSlackNotificationTest extends TestCase
             }
         );
     }
+
+    public function test_it_links_subscription_to_server_on_checkout_session_completed(): void
+    {
+        $eventBusClient = Mockery::mock(EventBusClient::class);
+        $eventBusClient->shouldReceive('publish')->never();
+
+        $service = new StripeWebhookService($eventBusClient);
+
+        $server = Server::factory()->create([
+            'uuid' => 'server-uuid-123',
+            'stripe_tx_id' => null,
+        ]);
+
+        $service->handleEvent([
+            'id' => 'evt_test_checkout_completed',
+            'type' => 'checkout.session.completed',
+            'created' => 1735689600,
+            'data' => [
+                'object' => [
+                    'subscription' => 'sub_test_checkout_123',
+                    'metadata' => [
+                        'server_uuid' => 'server-uuid-123',
+                    ],
+                ],
+            ],
+        ]);
+
+        $server->refresh();
+        $this->assertSame('sub_test_checkout_123', $server->stripe_tx_id);
+    }
 }

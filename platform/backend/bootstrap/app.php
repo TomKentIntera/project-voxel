@@ -21,6 +21,7 @@ return Application::configure(basePath: dirname(__DIR__))
     })
     ->withSchedule(function (Schedule $schedule): void {
         $schedule->command(PurgeExpiredAuthTokens::class)->daily();
+        $schedule->command('servers:reconcile-pending-payments')->everyFiveMinutes();
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         //

@@ -54,6 +54,15 @@ const navigation: NavItem[] = [
       </svg>
     ),
   },
+  {
+    label: 'Locations',
+    to: '/locations',
+    icon: (
+      <svg className="size-5" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+        <path strokeLinecap="round" strokeLinejoin="round" d="M12 21a8.966 8.966 0 0 1-5.002-1.518m10.004 0A8.966 8.966 0 0 1 12 21m5.002-1.518A8.96 8.96 0 0 0 21 12a8.96 8.96 0 0 0-3.998-7.482M6.998 19.482A8.96 8.96 0 0 1 3 12a8.96 8.96 0 0 1 3.998-7.482m0 14.964L12 12m0 0 5.002-7.482M12 12 6.998 4.518M12 12l5.002 7.482M12 12 6.998 19.482" />
+      </svg>
+    ),
+  },
 ]
 
 export default function Sidebar() {

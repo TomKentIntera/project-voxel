@@ -27,7 +27,8 @@ class StripeCheckoutSessionService
         string $planName,
         ?string $successUrl = null,
         ?string $cancelUrl = null,
-        ?string $promotionCode = null
+        ?string $promotionCode = null,
+        array $metadata = []
     ): Session {
         $catalogId = $this->stripePlanRepository->stripeCatalogIdForPlan($planName);
 
@@ -50,10 +51,10 @@ class StripeCheckoutSessionService
             ],
             'success_url' => $successUrl ?? $this->defaultSuccessUrl(),
             'cancel_url' => $cancelUrl ?? $this->defaultCancelUrl(),
-            'metadata' => [
+            'metadata' => array_merge([
                 'plan' => $planName,
                 'user_id' => (string) $user->getKey(),
-            ],
+            ], $metadata),
             'allow_promotion_codes' => true,
         ];
 
@@ -67,6 +68,13 @@ class StripeCheckoutSessionService
         }
 
         return $client->checkout->sessions->create($payload);
+    }
+
+    public function retrieveCheckoutSession(string $sessionId): Session
+    {
+        $client = $this->stripeClientFactory->make();
+
+        return $client->checkout->sessions->retrieve($sessionId, []);
     }
 
     private function resolvePriceId(StripeClient $client, string $catalogId): string

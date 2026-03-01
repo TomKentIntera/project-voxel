@@ -11,6 +11,8 @@ import ServerProfilePage from './pages/ServerProfilePage'
 import NodesPage from './pages/NodesPage'
 import NodeProfilePage from './pages/NodeProfilePage'
 import JobsPage from './pages/JobsPage'
+import LocationsPage from './pages/LocationsPage'
+import LocationsRawPage from './pages/LocationsRawPage'
 
 function App() {
   return (
@@ -32,6 +34,8 @@ function App() {
           <Route path="nodes" element={<NodesPage />} />
           <Route path="nodes/:id" element={<NodeProfilePage />} />
           <Route path="jobs" element={<JobsPage />} />
+          <Route path="locations" element={<LocationsPage />} />
+          <Route path="locations/raw" element={<LocationsRawPage />} />
         </Route>
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>

@@ -1,9 +1,20 @@
 interface HeaderProps {
   title: string
   description?: string
+  actionLabel?: string
+  actionHref?: string
+  actionOnClick?: () => void
 }
 
-export default function Header({ title, description }: HeaderProps) {
+export default function Header({
+  title,
+  description,
+  actionLabel,
+  actionHref,
+  actionOnClick,
+}: HeaderProps) {
+  const hasAction = typeof actionLabel === 'string' && actionLabel.trim() !== ''
+
   return (
     <header className="border-b border-slate-200 bg-white px-8 py-6">
       <div className="flex items-center justify-between">
@@ -14,6 +25,23 @@ export default function Header({ title, description }: HeaderProps) {
           )}
         </div>
         <div className="flex items-center gap-4">
+          {hasAction &&
+            (actionHref ? (
+              <a
+                href={actionHref}
+                className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-50"
+              >
+                {actionLabel}
+              </a>
+            ) : (
+              <button
+                type="button"
+                onClick={actionOnClick}
+                className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-50"
+              >
+                {actionLabel}
+              </button>
+            ))}
           {/* Notification bell */}
           <button
             type="button"

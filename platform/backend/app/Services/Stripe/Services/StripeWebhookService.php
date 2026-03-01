@@ -35,6 +35,10 @@ class StripeWebhookService
         }
 
         switch ($eventType) {
+            case 'checkout.session.completed':
+                $this->handleCheckoutSessionCompleted($eventPayload);
+                break;
+
             case 'invoice.payment_succeeded':
                 $this->handleInvoicePaymentSucceeded($eventPayload);
                 break;
@@ -47,6 +51,36 @@ class StripeWebhookService
                 Log::info('Unhandled Stripe webhook event.', ['type' => $eventType]);
                 break;
         }
+    }
+
+    /**
+     * @param  array<string, mixed>  $eventPayload
+     */
+    private function handleCheckoutSessionCompleted(array $eventPayload): void
+    {
+        $session = $eventPayload['data']['object'] ?? null;
+        if (! is_array($session)) {
+            return;
+        }
+
+        $subscriptionId = $session['subscription'] ?? null;
+        $serverUuid = $session['metadata']['server_uuid'] ?? null;
+
+        if (! is_string($subscriptionId) || $subscriptionId === '') {
+            return;
+        }
+
+        if (! is_string($serverUuid) || $serverUuid === '') {
+            return;
+        }
+
+        $server = Server::where('uuid', $serverUuid)->first();
+        if ($server === null) {
+            return;
+        }
+
+        $server->stripe_tx_id = $subscriptionId;
+        $server->save();
     }
 
     /**
