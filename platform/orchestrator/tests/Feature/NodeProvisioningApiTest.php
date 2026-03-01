@@ -295,6 +295,74 @@ class NodeProvisioningApiTest extends TestCase
         $this->assertStringContainsString("/opt/intera/orchestrator-monitor/.artifact/'main.py'", $script);
     }
 
+    public function test_issue_command_fails_when_signed_archive_url_cannot_be_generated_for_disk(): void
+    {
+        config()->set('services.pterodactyl', [
+            'base_url' => 'https://panel.example.test',
+            'application_api_key' => 'test-app-api-key',
+            'client_api_key' => 'test-client-api-key',
+            'timeout' => 15,
+        ]);
+        config()->set('services.provisioning.monitor_archive_url', '');
+        config()->set('services.provisioning.monitor_script_url', '');
+        config()->set('services.provisioning.monitor_archive_disk', 'provisioning_artifacts');
+        config()->set('services.provisioning.monitor_archive_path', 'latest.zip');
+        config()->set('services.provisioning.monitor_archive_public_url', false);
+        config()->set('filesystems.disks.provisioning_artifacts', [
+            'driver' => 'local',
+            'root' => storage_path('framework/testing/disks/provisioning-artifacts-signed'),
+            'url' => 'https://artifacts.example.test',
+            'visibility' => 'public',
+            'throw' => false,
+            'report' => false,
+        ]);
+
+        Storage::disk('provisioning_artifacts')->put('latest.zip', 'fake-zip-data');
+
+        Http::fake([
+            'https://panel.example.test/api/application/nodes/778/configuration' => Http::response([
+                'debug' => false,
+                'uuid' => 'f2b6f48d-1449-4f7a-96d5-69ddbe6eac8c',
+                'token_id' => 'Yt7fFgg8lbbYQpTI',
+                'token' => 'E6oxWHv0MJUpRpo4guFtiW5CJnBR6anpUWpQlDMFvgIij5OfypiBwfLNcncKopRY',
+                'api' => [
+                    'host' => '0.0.0.0',
+                    'port' => 8080,
+                    'ssl' => [
+                        'enabled' => false,
+                        'cert' => '/etc/letsencrypt/live/example.test/fullchain.pem',
+                        'key' => '/etc/letsencrypt/live/example.test/privkey.pem',
+                    ],
+                    'upload_limit' => 100,
+                ],
+                'system' => [
+                    'data' => '/var/lib/pterodactyl/volumes',
+                    'sftp' => [
+                        'bind_port' => 2022,
+                    ],
+                ],
+                'allowed_mounts' => [],
+                'remote' => 'https://panel.example.test',
+            ], 200),
+        ]);
+
+        $token = $this->authenticateAdmin();
+        $node = Node::factory()->create([
+            'id' => 'node-provision-require-signed-url',
+            'ip_address' => '203.0.113.31',
+            'ptero_node_id' => 778,
+            'sync_status' => Node::SYNC_STATUS_SYNCED,
+        ]);
+
+        $this->withHeader('Authorization', 'Bearer '.$token)
+            ->postJson('/api/nodes/'.$node->id.'/provisioning-command')
+            ->assertUnprocessable()
+            ->assertJsonPath('message', static function (mixed $message): bool {
+                return is_string($message)
+                    && str_contains($message, 'Unable to generate a signed URL for monitor archive');
+            });
+    }
+
     private function authenticateAdmin(): string
     {
         $admin = User::factory()->admin()->create([

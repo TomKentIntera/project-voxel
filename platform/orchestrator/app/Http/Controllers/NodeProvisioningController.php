@@ -188,15 +188,6 @@ class NodeProvisioningController extends Controller
             ];
         }
 
-        $monitorScriptUrl = trim((string) config('services.provisioning.monitor_script_url', ''));
-
-        if ($monitorScriptUrl !== '') {
-            return [
-                'type' => 'url',
-                'value' => $monitorScriptUrl,
-            ];
-        }
-
         $archiveUrlFromDisk = $this->resolveMonitorArchiveUrlFromDisk($bootstrapTtlMinutes);
 
         if ($archiveUrlFromDisk !== null) {
@@ -215,6 +206,15 @@ class NodeProvisioningController extends Controller
                 'value' => $archiveUrlFromDisk,
                 'checksum' => $archiveChecksum !== '' ? $archiveChecksum : null,
                 'entrypoint' => $archiveEntrypoint !== '' ? $archiveEntrypoint : 'main.py',
+            ];
+        }
+
+        $monitorScriptUrl = trim((string) config('services.provisioning.monitor_script_url', ''));
+
+        if ($monitorScriptUrl !== '') {
+            return [
+                'type' => 'url',
+                'value' => $monitorScriptUrl,
             ];
         }
 
@@ -295,9 +295,14 @@ class NodeProvisioningController extends Controller
 
         try {
             return $disk->temporaryUrl($archivePath, now()->addMinutes($resolvedTtlMinutes));
-        } catch (Throwable) {
-            // Fall back to a plain URL when temporary URLs are unavailable.
-            return $disk->url($archivePath);
+        } catch (Throwable $exception) {
+            throw new RuntimeException(sprintf(
+                'Unable to generate a signed URL for monitor archive "%s" on disk "%s" (%s). '
+                .'Either enable temporary URL support on this disk or set PROVISIONING_MONITOR_ARCHIVE_PUBLIC_URL=true.',
+                $archivePath,
+                $archiveDisk,
+                trim($exception->getMessage()) !== '' ? trim($exception->getMessage()) : 'unknown error'
+            ));
         }
     }
 
