@@ -139,6 +139,34 @@ export function createNode(
   })
 }
 
+export interface NodeProvisioningCommand {
+  node_id: string
+  expires_at: string
+  bootstrap_url: string
+  command: string
+}
+
+interface NodeProvisioningCommandResponse {
+  data: NodeProvisioningCommand
+}
+
+export function generateNodeProvisioningCommand(
+  token: string,
+  id: string,
+  ttlMinutes?: number,
+): Promise<NodeProvisioningCommandResponse> {
+  const body = ttlMinutes ? { ttl_minutes: ttlMinutes } : undefined
+
+  return apiRequest<NodeProvisioningCommandResponse>(
+    `/api/nodes/${encodeURIComponent(id)}/provisioning-command`,
+    {
+      method: 'POST',
+      token,
+      body,
+    },
+  )
+}
+
 interface DeleteNodeResponse {
   message: string
 }

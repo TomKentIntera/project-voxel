@@ -63,6 +63,16 @@ class PterodactylApiClient
     }
 
     /**
+     * Retrieve the Wings daemon configuration payload for a node.
+     *
+     * @return array<string, mixed>
+     */
+    public function getNodeConfiguration(int|string $nodeId): array
+    {
+        return $this->applicationSend('GET', '/nodes/'.$nodeId.'/configuration');
+    }
+
+    /**
      * @param  array<string, mixed>  $payload
      * @return array<string, mixed>
      */

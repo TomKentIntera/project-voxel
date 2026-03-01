@@ -142,6 +142,38 @@ class PterodactylApiClientTest extends TestCase
         });
     }
 
+    public function test_get_node_configuration_returns_raw_configuration_payload(): void
+    {
+        Http::fake([
+            'https://panel.example.com/api/application/nodes/12/configuration' => Http::response([
+                'debug' => false,
+                'uuid' => 'f2b6f48d-1449-4f7a-96d5-69ddbe6eac8c',
+                'token_id' => 'token-id-123',
+                'token' => 'token-value-456',
+                'api' => [
+                    'host' => '0.0.0.0',
+                    'port' => 8080,
+                ],
+            ], 200),
+        ]);
+
+        $client = app(PterodactylApiClient::class);
+
+        $configuration = $client->getNodeConfiguration(12);
+
+        $this->assertFalse((bool) ($configuration['debug'] ?? true));
+        $this->assertSame('f2b6f48d-1449-4f7a-96d5-69ddbe6eac8c', $configuration['uuid'] ?? null);
+        $this->assertSame('token-id-123', $configuration['token_id'] ?? null);
+        $this->assertSame('token-value-456', $configuration['token'] ?? null);
+        $this->assertSame(8080, $configuration['api']['port'] ?? null);
+
+        Http::assertSent(function (Request $request): bool {
+            return $request->method() === 'GET'
+                && $request->url() === 'https://panel.example.com/api/application/nodes/12/configuration'
+                && $request->hasHeader('Authorization', 'Bearer app-api-token');
+        });
+    }
+
     public function test_create_node_allocations_posts_payload(): void
     {
         Http::fake([
