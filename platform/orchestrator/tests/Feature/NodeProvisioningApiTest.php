@@ -7,6 +7,7 @@ namespace Tests\Feature;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\Client\Request as HttpClientRequest;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Storage;
 use Interadigital\CoreModels\Models\Node;
 use Interadigital\CoreModels\Models\User;
 use Tests\TestCase;
@@ -207,6 +208,85 @@ class NodeProvisioningApiTest extends TestCase
             "/opt/intera/orchestrator-monitor/.artifact/'dist/main.py'",
             $script
         );
+    }
+
+    public function test_bootstrap_script_can_resolve_monitor_archive_from_configured_disk(): void
+    {
+        config()->set('services.pterodactyl', [
+            'base_url' => 'https://panel.example.test',
+            'application_api_key' => 'test-app-api-key',
+            'client_api_key' => 'test-client-api-key',
+            'timeout' => 15,
+        ]);
+        config()->set('services.provisioning.monitor_archive_url', '');
+        config()->set('services.provisioning.monitor_archive_disk', 'provisioning_artifacts');
+        config()->set('services.provisioning.monitor_archive_path', 'node-agent/latest/node-monitor.zip');
+        config()->set('services.provisioning.monitor_archive_public_url', true);
+        config()->set('services.provisioning.monitor_archive_entrypoint', 'main.py');
+        config()->set('filesystems.disks.provisioning_artifacts', [
+            'driver' => 'local',
+            'root' => storage_path('framework/testing/disks/provisioning-artifacts'),
+            'url' => 'https://artifacts.example.test',
+            'visibility' => 'public',
+            'throw' => false,
+            'report' => false,
+        ]);
+        Storage::disk('provisioning_artifacts')->put(
+            'node-agent/latest/node-monitor.zip',
+            'fake-zip-data'
+        );
+
+        Http::fake([
+            'https://panel.example.test/api/application/nodes/777/configuration' => Http::response([
+                'debug' => false,
+                'uuid' => 'f2b6f48d-1449-4f7a-96d5-69ddbe6eac8c',
+                'token_id' => 'Yt7fFgg8lbbYQpTI',
+                'token' => 'E6oxWHv0MJUpRpo4guFtiW5CJnBR6anpUWpQlDMFvgIij5OfypiBwfLNcncKopRY',
+                'api' => [
+                    'host' => '0.0.0.0',
+                    'port' => 8080,
+                    'ssl' => [
+                        'enabled' => false,
+                        'cert' => '/etc/letsencrypt/live/example.test/fullchain.pem',
+                        'key' => '/etc/letsencrypt/live/example.test/privkey.pem',
+                    ],
+                    'upload_limit' => 100,
+                ],
+                'system' => [
+                    'data' => '/var/lib/pterodactyl/volumes',
+                    'sftp' => [
+                        'bind_port' => 2022,
+                    ],
+                ],
+                'allowed_mounts' => [],
+                'remote' => 'https://panel.example.test',
+            ], 200),
+        ]);
+
+        $token = $this->authenticateAdmin();
+        $node = Node::factory()->create([
+            'id' => 'node-provision-disk',
+            'ip_address' => '203.0.113.30',
+            'ptero_node_id' => 777,
+            'sync_status' => Node::SYNC_STATUS_SYNCED,
+        ]);
+
+        $response = $this->withHeader('Authorization', 'Bearer '.$token)
+            ->postJson('/api/nodes/'.$node->id.'/provisioning-command');
+
+        $response->assertCreated();
+
+        $bootstrapPath = parse_url((string) $response->json('data.bootstrap_url'), PHP_URL_PATH);
+        $this->assertIsString($bootstrapPath);
+        $this->assertNotSame('', $bootstrapPath);
+
+        $script = (string) $this->get((string) $bootstrapPath)->getContent();
+        $expectedArchiveUrl = Storage::disk('provisioning_artifacts')->url('node-agent/latest/node-monitor.zip');
+
+        $this->assertStringContainsString('curl -fsSL', $script);
+        $this->assertStringContainsString('node-agent/latest/node-monitor.zip', $script);
+        $this->assertStringContainsString($expectedArchiveUrl, $script);
+        $this->assertStringContainsString("/opt/intera/orchestrator-monitor/.artifact/'main.py'", $script);
     }
 
     private function authenticateAdmin(): string

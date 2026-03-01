@@ -9,6 +9,7 @@ use App\Services\Pterodactyl\Services\PterodactylApiClient;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Interadigital\CoreModels\Models\Node;
 use RuntimeException;
@@ -37,11 +38,14 @@ class NodeProvisioningController extends Controller
             ], Response::HTTP_NOT_FOUND);
         }
 
+        $ttlMinutes = $this->resolveTtlMinutes($validated);
+        $expiresAt = now()->addMinutes($ttlMinutes);
+
         try {
             $this->assertPterodactylConfigured();
             $pteroNodeId = $this->ensureNodeHasPanelId($node);
             $wingsConfiguration = $pterodactylApiClient->getNodeConfiguration($pteroNodeId);
-            $monitorInstaller = $this->resolveMonitorInstaller();
+            $monitorInstaller = $this->resolveMonitorInstaller($ttlMinutes);
             $orchestratorBaseUrl = $this->resolveOrchestratorApiBaseUrl();
             $wingsBinaryUrlAmd64 = $this->resolveWingsBinaryUrlForArch('amd64');
             $wingsBinaryUrlArm64 = $this->resolveWingsBinaryUrlForArch('arm64');
@@ -57,8 +61,6 @@ class NodeProvisioningController extends Controller
             'token_hash' => Node::hashToken($rawNodeToken),
         ])->save();
 
-        $ttlMinutes = $this->resolveTtlMinutes($validated);
-        $expiresAt = now()->addMinutes($ttlMinutes);
         $bootstrapToken = Str::random(64);
 
         Cache::put($this->cacheKey($bootstrapToken), [
@@ -170,7 +172,7 @@ class NodeProvisioningController extends Controller
      *   entrypoint?: string|null
      * }
      */
-    private function resolveMonitorInstaller(): array
+    private function resolveMonitorInstaller(int $bootstrapTtlMinutes): array
     {
         $monitorArchiveUrl = trim((string) config('services.provisioning.monitor_archive_url', ''));
 
@@ -192,6 +194,20 @@ class NodeProvisioningController extends Controller
             return [
                 'type' => 'url',
                 'value' => $monitorScriptUrl,
+            ];
+        }
+
+        $archiveUrlFromDisk = $this->resolveMonitorArchiveUrlFromDisk($bootstrapTtlMinutes);
+
+        if ($archiveUrlFromDisk !== null) {
+            $archiveEntrypoint = trim((string) config('services.provisioning.monitor_archive_entrypoint', 'main.py'));
+            $archiveChecksum = trim((string) config('services.provisioning.monitor_archive_sha256', ''));
+
+            return [
+                'type' => 'archive_url',
+                'value' => $archiveUrlFromDisk,
+                'checksum' => $archiveChecksum !== '' ? $archiveChecksum : null,
+                'entrypoint' => $archiveEntrypoint !== '' ? $archiveEntrypoint : 'main.py',
             ];
         }
 
@@ -217,6 +233,65 @@ class NodeProvisioningController extends Controller
             .'PROVISIONING_MONITOR_SCRIPT_URL '
             .'or PROVISIONING_MONITOR_SCRIPT_PATH.'
         );
+    }
+
+    private function resolveMonitorArchiveUrlFromDisk(int $bootstrapTtlMinutes): ?string
+    {
+        $archiveDisk = trim((string) config('services.provisioning.monitor_archive_disk', ''));
+        $archivePath = trim((string) config('services.provisioning.monitor_archive_path', ''));
+
+        if ($archiveDisk === '' || $archivePath === '') {
+            return null;
+        }
+
+        $diskConfig = config('filesystems.disks.'.$archiveDisk);
+
+        if (! is_array($diskConfig)) {
+            return null;
+        }
+
+        $driver = trim((string) ($diskConfig['driver'] ?? ''));
+
+        if ($driver === 's3' && trim((string) ($diskConfig['bucket'] ?? '')) === '') {
+            return null;
+        }
+
+        $disk = Storage::disk($archiveDisk);
+
+        try {
+            $archiveExists = $disk->exists($archivePath);
+        } catch (Throwable $exception) {
+            throw new RuntimeException(sprintf(
+                'Unable to access monitor archive disk "%s" (%s).',
+                $archiveDisk,
+                trim($exception->getMessage()) !== '' ? trim($exception->getMessage()) : 'unknown error'
+            ));
+        }
+
+        if (! $archiveExists) {
+            throw new RuntimeException(sprintf(
+                'Monitor archive not found on disk "%s" at path "%s".',
+                $archiveDisk,
+                $archivePath
+            ));
+        }
+
+        $forcePublicUrl = (bool) config('services.provisioning.monitor_archive_public_url', false);
+
+        if ($forcePublicUrl) {
+            return $disk->url($archivePath);
+        }
+
+        $configuredTtlMinutes = (int) config('services.provisioning.monitor_archive_url_ttl_minutes', 60);
+        $minimumTtlMinutes = max($bootstrapTtlMinutes + 15, 30);
+        $resolvedTtlMinutes = max($configuredTtlMinutes, $minimumTtlMinutes);
+
+        try {
+            return $disk->temporaryUrl($archivePath, now()->addMinutes($resolvedTtlMinutes));
+        } catch (Throwable) {
+            // Fall back to a plain URL when temporary URLs are unavailable.
+            return $disk->url($archivePath);
+        }
     }
 
     /**

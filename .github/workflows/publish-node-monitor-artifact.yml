@@ -1,0 +1,120 @@
+name: Publish Node Monitor Artifact
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "node_agent/**"
+      - ".github/workflows/publish-node-monitor-artifact.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: publish-node-monitor-artifact-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  publish:
+    name: Build and Publish Node Monitor Artifact
+    runs-on: ubuntu-latest
+    env:
+      PROVISIONING_MONITOR_ARCHIVE_PATH: ${{ vars.PROVISIONING_MONITOR_ARCHIVE_PATH }}
+      PROVISIONING_ARTIFACTS_AWS_BUCKET: ${{ vars.PROVISIONING_ARTIFACTS_AWS_BUCKET }}
+      PROVISIONING_ARTIFACTS_AWS_REGION: ${{ vars.PROVISIONING_ARTIFACTS_AWS_REGION }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Build node monitor zip archive
+        run: |
+          set -euo pipefail
+          rm -rf build/node-monitor
+          mkdir -p build/node-monitor
+          cp node_agent/main.py build/node-monitor/main.py
+          cp node_agent/README.md build/node-monitor/README.md
+          printf '%s\n' "${GITHUB_SHA}" > build/node-monitor/BUILD_COMMIT
+          (
+            cd build/node-monitor
+            zip -r ../node-monitor.zip .
+          )
+          sha256sum build/node-monitor.zip | awk '{print $1}' > build/node-monitor.zip.sha256
+
+      - name: Resolve artifact destination settings
+        run: |
+          set -euo pipefail
+          if [[ -z "${PROVISIONING_ARTIFACTS_AWS_BUCKET:-}" ]]; then
+            echo "Repository variable PROVISIONING_ARTIFACTS_AWS_BUCKET is required." >&2
+            exit 1
+          fi
+
+          ARCHIVE_PATH="${PROVISIONING_MONITOR_ARCHIVE_PATH:-node-agent/latest/node-monitor.zip}"
+          AWS_REGION="${PROVISIONING_ARTIFACTS_AWS_REGION:-us-east-1}"
+
+          echo "ARCHIVE_PATH=${ARCHIVE_PATH}" >> "${GITHUB_ENV}"
+          echo "AWS_REGION=${AWS_REGION}" >> "${GITHUB_ENV}"
+          echo "VERSIONED_ARCHIVE_PATH=node-agent/releases/${GITHUB_SHA}/node-monitor.zip" >> "${GITHUB_ENV}"
+
+      - name: Configure AWS credentials (OIDC role)
+        if: ${{ vars.PROVISIONING_ARTIFACTS_AWS_ROLE_TO_ASSUME != '' }}
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.PROVISIONING_ARTIFACTS_AWS_ROLE_TO_ASSUME }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Configure AWS credentials (access keys fallback)
+        if: ${{ vars.PROVISIONING_ARTIFACTS_AWS_ROLE_TO_ASSUME == '' }}
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.PROVISIONING_ARTIFACTS_AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.PROVISIONING_ARTIFACTS_AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Upload monitor artifact and checksum
+        run: |
+          set -euo pipefail
+
+          ARCHIVE_URI="s3://${PROVISIONING_ARTIFACTS_AWS_BUCKET}/${ARCHIVE_PATH}"
+          ARCHIVE_SHA_URI="${ARCHIVE_URI}.sha256"
+          VERSIONED_ARCHIVE_URI="s3://${PROVISIONING_ARTIFACTS_AWS_BUCKET}/${VERSIONED_ARCHIVE_PATH}"
+          VERSIONED_ARCHIVE_SHA_URI="${VERSIONED_ARCHIVE_URI}.sha256"
+          SHA256="$(cat build/node-monitor.zip.sha256)"
+
+          aws s3 cp build/node-monitor.zip "${ARCHIVE_URI}" \
+            --only-show-errors \
+            --content-type application/zip \
+            --cache-control "no-cache, no-store, must-revalidate" \
+            --metadata "commit_sha=${GITHUB_SHA}"
+
+          aws s3 cp build/node-monitor.zip.sha256 "${ARCHIVE_SHA_URI}" \
+            --only-show-errors \
+            --content-type text/plain \
+            --cache-control "no-cache, no-store, must-revalidate" \
+            --metadata "commit_sha=${GITHUB_SHA}"
+
+          aws s3 cp build/node-monitor.zip "${VERSIONED_ARCHIVE_URI}" \
+            --only-show-errors \
+            --content-type application/zip \
+            --cache-control "no-cache, no-store, must-revalidate" \
+            --metadata "commit_sha=${GITHUB_SHA}"
+
+          aws s3 cp build/node-monitor.zip.sha256 "${VERSIONED_ARCHIVE_SHA_URI}" \
+            --only-show-errors \
+            --content-type text/plain \
+            --cache-control "no-cache, no-store, must-revalidate" \
+            --metadata "commit_sha=${GITHUB_SHA}"
+
+          {
+            echo "### Node monitor artifact published"
+            echo
+            echo "- Archive path: \`${ARCHIVE_PATH}\`"
+            echo "- Versioned path: \`${VERSIONED_ARCHIVE_PATH}\`"
+            echo "- SHA256: \`${SHA256}\`"
+            echo
+            echo "Set orchestrator env values:"
+            echo "- \`PROVISIONING_MONITOR_ARCHIVE_PATH=${ARCHIVE_PATH}\`"
+            echo "- \`PROVISIONING_MONITOR_ARCHIVE_SHA256=${SHA256}\`"
+          } >> "${GITHUB_STEP_SUMMARY}"

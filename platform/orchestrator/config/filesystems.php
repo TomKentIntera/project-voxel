@@ -75,6 +75,25 @@ return [
             'report' => false,
         ],
 
+        'provisioning_artifacts' => [
+            'driver' => env('PROVISIONING_ARTIFACTS_DRIVER', 's3'),
+            'root' => env('PROVISIONING_ARTIFACTS_DRIVER', 's3') === 'local'
+                ? (env('PROVISIONING_ARTIFACTS_LOCAL_ROOT') ?: storage_path('app/provisioning-artifacts'))
+                : env('PROVISIONING_ARTIFACTS_ROOT', ''),
+            'key' => env('PROVISIONING_ARTIFACTS_AWS_ACCESS_KEY_ID', env('AWS_ACCESS_KEY_ID')),
+            'secret' => env('PROVISIONING_ARTIFACTS_AWS_SECRET_ACCESS_KEY', env('AWS_SECRET_ACCESS_KEY')),
+            'region' => env('PROVISIONING_ARTIFACTS_AWS_DEFAULT_REGION', env('AWS_DEFAULT_REGION', 'us-east-1')),
+            'bucket' => env('PROVISIONING_ARTIFACTS_AWS_BUCKET', env('AWS_BUCKET')),
+            'url' => env('PROVISIONING_ARTIFACTS_AWS_URL'),
+            'endpoint' => env('PROVISIONING_ARTIFACTS_AWS_ENDPOINT', env('AWS_ENDPOINT')),
+            'use_path_style_endpoint' => env(
+                'PROVISIONING_ARTIFACTS_AWS_USE_PATH_STYLE_ENDPOINT',
+                env('AWS_USE_PATH_STYLE_ENDPOINT', false)
+            ),
+            'throw' => false,
+            'report' => false,
+        ],
+
     ],
 
     /*
