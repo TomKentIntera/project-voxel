@@ -1,0 +1,601 @@
+<?php
+
+declare(strict_types=1);
+
+namespace App\Http\Controllers;
+
+use App\Jobs\SyncNodeToPterodactylJob;
+use App\Services\Pterodactyl\Services\PterodactylApiClient;
+use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
+use Interadigital\CoreModels\Models\Node;
+use RuntimeException;
+use Symfony\Component\HttpFoundation\Response;
+use Throwable;
+
+class NodeProvisioningController extends Controller
+{
+    private const CACHE_KEY_PREFIX = 'node-provisioning-bootstrap:';
+
+    private const DEFAULT_TTL_MINUTES = 20;
+
+    private const MAX_TTL_MINUTES = 120;
+
+    public function issueCommand(Request $request, PterodactylApiClient $pterodactylApiClient, string $id): JsonResponse
+    {
+        $validated = $request->validate([
+            'ttl_minutes' => ['sometimes', 'integer', 'min:1', 'max:'.self::MAX_TTL_MINUTES],
+        ]);
+
+        $node = Node::query()->find($id);
+
+        if (! ($node instanceof Node)) {
+            return response()->json([
+                'message' => 'Node not found.',
+            ], Response::HTTP_NOT_FOUND);
+        }
+
+        $ttlMinutes = $this->resolveTtlMinutes($validated);
+        $expiresAt = now()->addMinutes($ttlMinutes);
+
+        try {
+            $this->assertPterodactylConfigured();
+            $pteroNodeId = $this->ensureNodeHasPanelId($node);
+            $wingsConfiguration = $pterodactylApiClient->getNodeConfiguration($pteroNodeId);
+            $monitorInstaller = $this->resolveMonitorInstaller($ttlMinutes);
+            $orchestratorBaseUrl = $this->resolveOrchestratorApiBaseUrl();
+            $wingsBinaryUrlAmd64 = $this->resolveWingsBinaryUrlForArch('amd64');
+            $wingsBinaryUrlArm64 = $this->resolveWingsBinaryUrlForArch('arm64');
+        } catch (Throwable $exception) {
+            return response()->json([
+                'message' => $this->provisioningFailureMessage($exception),
+            ], Response::HTTP_UNPROCESSABLE_ENTITY);
+        }
+
+        $rawNodeToken = Node::generateToken();
+
+        $node->forceFill([
+            'token_hash' => Node::hashToken($rawNodeToken),
+        ])->save();
+
+        $bootstrapToken = Str::random(64);
+
+        Cache::put($this->cacheKey($bootstrapToken), [
+            'node_id' => $node->id,
+            'node_ip' => $node->ip_address,
+            'node_token' => $rawNodeToken,
+            'orchestrator_base_url' => $orchestratorBaseUrl,
+            'wings_configuration' => $wingsConfiguration,
+            'monitor_installer_type' => $monitorInstaller['type'],
+            'monitor_installer_value' => $monitorInstaller['value'],
+            'monitor_installer_checksum' => $monitorInstaller['checksum'] ?? null,
+            'monitor_installer_entrypoint' => $monitorInstaller['entrypoint'] ?? null,
+            'wings_binary_url_amd64' => $wingsBinaryUrlAmd64,
+            'wings_binary_url_arm64' => $wingsBinaryUrlArm64,
+        ], $expiresAt);
+
+        $bootstrapUrl = $this->buildBootstrapUrl($bootstrapToken);
+
+        return response()->json([
+            'data' => [
+                'node_id' => $node->id,
+                'expires_at' => $expiresAt->toIso8601String(),
+                'bootstrap_url' => $bootstrapUrl,
+                'command' => sprintf('curl -fsSL %s | sudo bash', escapeshellarg($bootstrapUrl)),
+            ],
+        ], Response::HTTP_CREATED);
+    }
+
+    public function bootstrapScript(string $token): Response
+    {
+        $normalizedToken = trim($token);
+
+        if ($normalizedToken === '' || preg_match('/^[A-Za-z0-9]+$/', $normalizedToken) !== 1) {
+            return response('Bootstrap token not found.', Response::HTTP_NOT_FOUND, [
+                'Content-Type' => 'text/plain; charset=utf-8',
+            ]);
+        }
+
+        $payload = Cache::pull($this->cacheKey($normalizedToken));
+
+        if (! is_array($payload)) {
+            return response('Bootstrap token not found or expired.', Response::HTTP_NOT_FOUND, [
+                'Content-Type' => 'text/plain; charset=utf-8',
+            ]);
+        }
+
+        return response($this->buildBootstrapScript($payload), Response::HTTP_OK, [
+            'Content-Type' => 'text/x-shellscript; charset=utf-8',
+            'Cache-Control' => 'no-store, no-cache, must-revalidate',
+            'Pragma' => 'no-cache',
+        ]);
+    }
+
+    /**
+     * @param  array<string, mixed>  $validated
+     */
+    private function resolveTtlMinutes(array $validated): int
+    {
+        $configuredDefault = (int) config('services.provisioning.bootstrap_ttl_minutes', self::DEFAULT_TTL_MINUTES);
+        $configuredMax = (int) config('services.provisioning.bootstrap_max_ttl_minutes', self::MAX_TTL_MINUTES);
+
+        $maxTtl = $configuredMax > 0 ? min($configuredMax, self::MAX_TTL_MINUTES) : self::MAX_TTL_MINUTES;
+        $ttl = (int) ($validated['ttl_minutes'] ?? $configuredDefault);
+
+        if ($ttl < 1) {
+            $ttl = self::DEFAULT_TTL_MINUTES;
+        }
+
+        return min($ttl, $maxTtl);
+    }
+
+    private function assertPterodactylConfigured(): void
+    {
+        $baseUrl = trim((string) config('services.pterodactyl.base_url', ''));
+        $applicationApiKey = trim((string) config('services.pterodactyl.application_api_key', ''));
+
+        if ($baseUrl === '' || $applicationApiKey === '') {
+            throw new RuntimeException(
+                'Pterodactyl base URL and application API key must be configured before generating provisioning commands.'
+            );
+        }
+    }
+
+    private function ensureNodeHasPanelId(Node $node): int
+    {
+        $pteroNodeId = $this->normalizePositiveInteger($node->ptero_node_id);
+
+        if ($pteroNodeId !== null) {
+            return $pteroNodeId;
+        }
+
+        SyncNodeToPterodactylJob::dispatchSync($node->id);
+        $node->refresh();
+
+        $resolvedNodeId = $this->normalizePositiveInteger($node->ptero_node_id);
+
+        if ($resolvedNodeId === null) {
+            throw new RuntimeException('Node did not receive a valid Pterodactyl node ID during synchronization.');
+        }
+
+        return $resolvedNodeId;
+    }
+
+    /**
+     * @return array{
+     *   type: string,
+     *   value: string,
+     *   checksum?: string|null,
+     *   entrypoint?: string|null
+     * }
+     */
+    private function resolveMonitorInstaller(int $bootstrapTtlMinutes): array
+    {
+        $monitorArchiveUrl = trim((string) config('services.provisioning.monitor_archive_url', ''));
+
+        if ($monitorArchiveUrl !== '') {
+            $archiveEntrypoint = trim((string) config('services.provisioning.monitor_archive_entrypoint', 'main.py'));
+            $archiveChecksum = trim((string) config('services.provisioning.monitor_archive_sha256', ''));
+
+            return [
+                'type' => 'archive_url',
+                'value' => $monitorArchiveUrl,
+                'checksum' => $archiveChecksum !== '' ? $archiveChecksum : null,
+                'entrypoint' => $archiveEntrypoint !== '' ? $archiveEntrypoint : 'main.py',
+            ];
+        }
+
+        $archiveUrlFromDisk = $this->resolveMonitorArchiveUrlFromDisk($bootstrapTtlMinutes);
+
+        if ($archiveUrlFromDisk !== null) {
+            $archiveEntrypoint = trim((string) config('services.provisioning.monitor_archive_entrypoint', 'main.py'));
+            $archiveChecksum = trim((string) config('services.provisioning.monitor_archive_sha256', ''));
+
+            if ($archiveChecksum === '') {
+                $archiveChecksum = $this->resolveMonitorArchiveChecksumFromDisk(
+                    trim((string) config('services.provisioning.monitor_archive_disk', '')),
+                    trim((string) config('services.provisioning.monitor_archive_path', ''))
+                ) ?? '';
+            }
+
+            return [
+                'type' => 'archive_url',
+                'value' => $archiveUrlFromDisk,
+                'checksum' => $archiveChecksum !== '' ? $archiveChecksum : null,
+                'entrypoint' => $archiveEntrypoint !== '' ? $archiveEntrypoint : 'main.py',
+            ];
+        }
+
+        $monitorScriptUrl = trim((string) config('services.provisioning.monitor_script_url', ''));
+
+        if ($monitorScriptUrl !== '') {
+            return [
+                'type' => 'url',
+                'value' => $monitorScriptUrl,
+            ];
+        }
+
+        foreach ($this->monitorScriptPathCandidates() as $candidatePath) {
+            if (! is_file($candidatePath) || ! is_readable($candidatePath)) {
+                continue;
+            }
+
+            $contents = file_get_contents($candidatePath);
+
+            if (! is_string($contents) || trim($contents) === '') {
+                continue;
+            }
+
+            return [
+                'type' => 'inline',
+                'value' => $contents,
+            ];
+        }
+
+        throw new RuntimeException(
+            'No monitor installer source is configured. Set PROVISIONING_MONITOR_ARCHIVE_URL, '
+            .'PROVISIONING_MONITOR_SCRIPT_URL '
+            .'or PROVISIONING_MONITOR_SCRIPT_PATH.'
+        );
+    }
+
+    private function resolveMonitorArchiveUrlFromDisk(int $bootstrapTtlMinutes): ?string
+    {
+        $archiveDisk = trim((string) config('services.provisioning.monitor_archive_disk', ''));
+        $archivePath = trim((string) config('services.provisioning.monitor_archive_path', ''));
+
+        if ($archiveDisk === '' || $archivePath === '') {
+            return null;
+        }
+
+        $diskConfig = config('filesystems.disks.'.$archiveDisk);
+
+        if (! is_array($diskConfig)) {
+            return null;
+        }
+
+        $driver = trim((string) ($diskConfig['driver'] ?? ''));
+
+        if ($driver === 's3' && trim((string) ($diskConfig['bucket'] ?? '')) === '') {
+            return null;
+        }
+
+        $disk = Storage::disk($archiveDisk);
+
+        try {
+            $archiveExists = $disk->exists($archivePath);
+        } catch (Throwable $exception) {
+            throw new RuntimeException(sprintf(
+                'Unable to access monitor archive disk "%s" (%s).',
+                $archiveDisk,
+                trim($exception->getMessage()) !== '' ? trim($exception->getMessage()) : 'unknown error'
+            ));
+        }
+
+        if (! $archiveExists) {
+            throw new RuntimeException(sprintf(
+                'Monitor archive not found on disk "%s" at path "%s".',
+                $archiveDisk,
+                $archivePath
+            ));
+        }
+
+        $forcePublicUrl = (bool) config('services.provisioning.monitor_archive_public_url', false);
+
+        if ($forcePublicUrl) {
+            return $disk->url($archivePath);
+        }
+
+        $configuredTtlMinutes = (int) config('services.provisioning.monitor_archive_url_ttl_minutes', 60);
+        $minimumTtlMinutes = max($bootstrapTtlMinutes + 15, 30);
+        $resolvedTtlMinutes = max($configuredTtlMinutes, $minimumTtlMinutes);
+
+        try {
+            return $disk->temporaryUrl($archivePath, now()->addMinutes($resolvedTtlMinutes));
+        } catch (Throwable $exception) {
+            throw new RuntimeException(sprintf(
+                'Unable to generate a signed URL for monitor archive "%s" on disk "%s" (%s). '
+                .'Either enable temporary URL support on this disk or set PROVISIONING_MONITOR_ARCHIVE_PUBLIC_URL=true.',
+                $archivePath,
+                $archiveDisk,
+                trim($exception->getMessage()) !== '' ? trim($exception->getMessage()) : 'unknown error'
+            ));
+        }
+    }
+
+    private function resolveMonitorArchiveChecksumFromDisk(string $archiveDisk, string $archivePath): ?string
+    {
+        if ($archiveDisk === '' || $archivePath === '') {
+            return null;
+        }
+
+        $checksumPath = $archivePath.'.sha256';
+        $disk = Storage::disk($archiveDisk);
+
+        try {
+            if (! $disk->exists($checksumPath)) {
+                return null;
+            }
+
+            $rawChecksum = trim((string) $disk->get($checksumPath));
+        } catch (Throwable) {
+            return null;
+        }
+
+        if ($rawChecksum === '') {
+            return null;
+        }
+
+        $parts = preg_split('/\s+/', $rawChecksum);
+        $candidate = is_array($parts) ? trim((string) ($parts[0] ?? '')) : '';
+
+        if ($candidate === '') {
+            return null;
+        }
+
+        return preg_match('/^[a-f0-9]{64}$/i', $candidate) === 1
+            ? strtolower($candidate)
+            : null;
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function monitorScriptPathCandidates(): array
+    {
+        $candidates = [];
+        $configuredPath = trim((string) config('services.provisioning.monitor_script_path', ''));
+
+        if ($configuredPath !== '') {
+            $candidates[] = $configuredPath;
+        }
+
+        $candidates[] = base_path('resources/provisioning/node-agent.py');
+        $candidates[] = base_path('../../node_agent/main.py');
+
+        /** @var list<string> $normalized */
+        $normalized = collect($candidates)
+            ->filter(fn (mixed $path): bool => is_string($path) && trim($path) !== '')
+            ->map(fn (string $path): string => trim($path))
+            ->unique()
+            ->values()
+            ->all();
+
+        return $normalized;
+    }
+
+    private function resolveOrchestratorApiBaseUrl(): string
+    {
+        $configured = trim((string) config('services.provisioning.orchestrator_base_url', ''));
+
+        if ($configured !== '') {
+            $normalized = rtrim($configured, '/');
+
+            return str_ends_with(strtolower($normalized), '/api')
+                ? $normalized
+                : $normalized.'/api';
+        }
+
+        $appUrl = trim((string) config('app.url', ''));
+
+        if ($appUrl === '') {
+            throw new RuntimeException(
+                'Unable to resolve orchestrator base URL for provisioning command generation (APP_URL is empty).'
+            );
+        }
+
+        return rtrim($appUrl, '/').'/api';
+    }
+
+    private function buildBootstrapUrl(string $bootstrapToken): string
+    {
+        $appUrl = trim((string) config('app.url', ''));
+
+        if ($appUrl === '') {
+            throw new RuntimeException('Unable to resolve bootstrap URL (APP_URL is empty).');
+        }
+
+        return rtrim($appUrl, '/').'/api/provisioning/bootstrap/'.$bootstrapToken;
+    }
+
+    private function cacheKey(string $bootstrapToken): string
+    {
+        return self::CACHE_KEY_PREFIX.$bootstrapToken;
+    }
+
+    /**
+     * @param  array<string, mixed>  $payload
+     */
+    private function buildBootstrapScript(array $payload): string
+    {
+        $nodeId = trim((string) ($payload['node_id'] ?? ''));
+        $nodeIp = trim((string) ($payload['node_ip'] ?? ''));
+        $nodeToken = trim((string) ($payload['node_token'] ?? ''));
+        $orchestratorBaseUrl = trim((string) ($payload['orchestrator_base_url'] ?? ''));
+        $wingsConfiguration = $payload['wings_configuration'] ?? null;
+        $monitorInstallerType = trim((string) ($payload['monitor_installer_type'] ?? ''));
+        $monitorInstallerValue = (string) ($payload['monitor_installer_value'] ?? '');
+        $monitorInstallerChecksum = is_string($payload['monitor_installer_checksum'] ?? null)
+            ? trim((string) $payload['monitor_installer_checksum'])
+            : null;
+        $monitorInstallerEntrypoint = is_string($payload['monitor_installer_entrypoint'] ?? null)
+            ? trim((string) $payload['monitor_installer_entrypoint'])
+            : null;
+        $wingsBinaryUrlAmd64 = trim((string) ($payload['wings_binary_url_amd64'] ?? ''));
+        $wingsBinaryUrlArm64 = trim((string) ($payload['wings_binary_url_arm64'] ?? ''));
+
+        if (
+            $nodeId === ''
+            || $nodeIp === ''
+            || $nodeToken === ''
+            || $orchestratorBaseUrl === ''
+            || ! is_array($wingsConfiguration)
+            || $wingsBinaryUrlAmd64 === ''
+            || $wingsBinaryUrlArm64 === ''
+        ) {
+            throw new RuntimeException('Provisioning bootstrap payload is incomplete.');
+        }
+
+        $wingsConfigJson = json_encode($wingsConfiguration, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
+
+        if (! is_string($wingsConfigJson) || trim($wingsConfigJson) === '') {
+            throw new RuntimeException('Unable to encode Wings configuration for bootstrap.');
+        }
+
+        $monitorInstallBlock = $this->buildMonitorInstallBlock(
+            $monitorInstallerType,
+            $monitorInstallerValue,
+            $monitorInstallerChecksum,
+            $monitorInstallerEntrypoint
+        );
+
+        $renderedScript = view('provisioning.bootstrap-script', [
+            'nodeIdQuoted' => $this->shellSingleQuote($nodeId),
+            'nodeTokenQuoted' => $this->shellSingleQuote($nodeToken),
+            'nodeIpQuoted' => $this->shellSingleQuote($nodeIp),
+            'orchestratorBaseUrlQuoted' => $this->shellSingleQuote($orchestratorBaseUrl),
+            'wingsConfigB64Quoted' => $this->shellSingleQuote(base64_encode($wingsConfigJson)),
+            'wingsUrlAmd64Quoted' => $this->shellSingleQuote($wingsBinaryUrlAmd64),
+            'wingsUrlArm64Quoted' => $this->shellSingleQuote($wingsBinaryUrlArm64),
+            'monitorInstallBlock' => $monitorInstallBlock,
+        ])->render();
+
+        return ltrim($renderedScript, "\n");
+    }
+
+    private function buildMonitorInstallBlock(
+        string $installerType,
+        string $installerValue,
+        ?string $installerChecksum = null,
+        ?string $installerEntrypoint = null
+    ): string
+    {
+        if ($installerType === 'archive_url') {
+            $url = trim($installerValue);
+
+            if ($url === '') {
+                throw new RuntimeException('Monitor installer archive URL is empty.');
+            }
+
+            $entrypoint = trim((string) $installerEntrypoint);
+
+            if ($entrypoint === '') {
+                $entrypoint = 'main.py';
+            }
+
+            $checksumValidationStep = '';
+            $checksum = trim((string) $installerChecksum);
+
+            if ($checksum !== '') {
+                $checksumValidationStep = sprintf(
+                    "echo '%s  /tmp/orchestrator-monitor.zip' | sha256sum -c -\n",
+                    $this->shellSingleQuote($checksum)
+                );
+            }
+
+            return sprintf(
+                "log \"Downloading orchestrator monitor archive...\"\n"
+                ."if ! command -v unzip >/dev/null 2>&1; then\n"
+                ."  apt-get update -y\n"
+                ."  apt-get install -y unzip\n"
+                ."fi\n"
+                ."curl -fsSL '%s' -o /tmp/orchestrator-monitor.zip\n"
+                ."%s"
+                ."rm -rf /opt/intera/orchestrator-monitor/.artifact\n"
+                ."install -d -m 0755 /opt/intera/orchestrator-monitor/.artifact\n"
+                ."unzip -qo /tmp/orchestrator-monitor.zip -d /opt/intera/orchestrator-monitor/.artifact\n"
+                ."if [[ ! -f /opt/intera/orchestrator-monitor/.artifact/'%s' ]]; then\n"
+                ."  echo \"Monitor archive is missing the configured entrypoint.\" >&2\n"
+                ."  exit 1\n"
+                ."fi\n"
+                ."cp /opt/intera/orchestrator-monitor/.artifact/'%s' /opt/intera/orchestrator-monitor/main.py\n"
+                ."rm -f /tmp/orchestrator-monitor.zip",
+                $this->shellSingleQuote($url),
+                $checksumValidationStep,
+                $this->shellSingleQuote($entrypoint),
+                $this->shellSingleQuote($entrypoint)
+            );
+        }
+
+        if ($installerType === 'url') {
+            $url = trim($installerValue);
+
+            if ($url === '') {
+                throw new RuntimeException('Monitor installer URL is empty.');
+            }
+
+            return sprintf(
+                "log \"Downloading orchestrator monitor script...\"\n"
+                ."curl -fsSL '%s' -o /opt/intera/orchestrator-monitor/main.py",
+                $this->shellSingleQuote($url)
+            );
+        }
+
+        if ($installerType === 'inline') {
+            $encodedScript = base64_encode($installerValue);
+
+            if ($encodedScript === '') {
+                throw new RuntimeException('Embedded monitor installer script is empty.');
+            }
+
+            return sprintf(
+                "log \"Installing embedded orchestrator monitor script...\"\n"
+                ."printf '%%s' '%s' | base64 --decode > /opt/intera/orchestrator-monitor/main.py",
+                $this->shellSingleQuote($encodedScript)
+            );
+        }
+
+        throw new RuntimeException('Unsupported monitor installer source type.');
+    }
+
+    private function resolveWingsBinaryUrlForArch(string $arch): string
+    {
+        $template = trim((string) config(
+            'services.provisioning.wings_binary_url_template',
+            'https://github.com/pterodactyl/wings/releases/latest/download/wings_linux_%s'
+        ));
+
+        if ($template === '') {
+            throw new RuntimeException('Wings binary URL template is empty.');
+        }
+
+        return str_contains($template, '%s')
+            ? sprintf($template, $arch)
+            : $template;
+    }
+
+    private function shellSingleQuote(string $value): string
+    {
+        return str_replace("'", "'\"'\"'", $value);
+    }
+
+    private function normalizePositiveInteger(mixed $value): ?int
+    {
+        if (is_int($value) && $value > 0) {
+            return $value;
+        }
+
+        if (is_string($value) && preg_match('/^\d+$/', trim($value)) === 1) {
+            $normalized = (int) trim($value);
+
+            return $normalized > 0 ? $normalized : null;
+        }
+
+        return null;
+    }
+
+    private function provisioningFailureMessage(Throwable $exception): string
+    {
+        $message = trim($exception->getMessage());
+
+        if ($message === '') {
+            return 'Unable to generate provisioning command for this node.';
+        }
+
+        return mb_substr($message, 0, 1000);
+    }
+}
+

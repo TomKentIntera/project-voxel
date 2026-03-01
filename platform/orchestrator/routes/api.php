@@ -5,6 +5,7 @@ use App\Http\Controllers\BannerController;
 use App\Http\Controllers\FaqController;
 use App\Http\Controllers\MetricsController;
 use App\Http\Controllers\NodeController;
+use App\Http\Controllers\NodeProvisioningController;
 use App\Http\Controllers\NodeTelemetryController;
 use App\Http\Controllers\PlanController;
 use App\Http\Controllers\RegionalProxyController;
@@ -34,12 +35,16 @@ Route::middleware(['node.telemetry.auth'])->group(function (): void {
     Route::post('/internal/nodes/{node_id}/telemetry', [NodeTelemetryController::class, 'store']);
 });
 
+Route::get('/provisioning/bootstrap/{token}', [NodeProvisioningController::class, 'bootstrapScript'])
+    ->where('token', '[A-Za-z0-9]+');
+
 Route::middleware(['auth.jwt', 'admin'])->group(function (): void {
     Route::get('/servers', [ServerController::class, 'index']);
     Route::get('/servers/{id}', [ServerController::class, 'show']);
     Route::get('/nodes', [NodeController::class, 'index']);
     Route::get('/nodes/{id}', [NodeController::class, 'show']);
     Route::post('/nodes', [NodeController::class, 'store']);
+    Route::post('/nodes/{id}/provisioning-command', [NodeProvisioningController::class, 'issueCommand']);
     Route::delete('/nodes/{id}', [NodeController::class, 'destroy']);
     Route::get('/regional-proxies', [RegionalProxyController::class, 'index']);
     Route::get('/regional-proxies/{id}', [RegionalProxyController::class, 'show']);

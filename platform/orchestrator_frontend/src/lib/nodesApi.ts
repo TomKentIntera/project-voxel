@@ -122,6 +122,21 @@ export interface CreateNodePayload {
   name: string
   region: string
   ip_address: string
+  ptero_location_id: number
+  fqdn: string
+  scheme: 'http' | 'https'
+  behind_proxy: boolean
+  maintenance_mode?: boolean
+  memory: number
+  memory_overallocate?: number
+  disk: number
+  disk_overallocate?: number
+  upload_size: number
+  daemon_sftp: number
+  daemon_listen: number
+  allocation_ip?: string
+  allocation_alias?: string | null
+  allocation_ports: string[]
 }
 
 interface CreateNodeResponse {
@@ -137,6 +152,34 @@ export function createNode(
     token,
     body: payload,
   })
+}
+
+export interface NodeProvisioningCommand {
+  node_id: string
+  expires_at: string
+  bootstrap_url: string
+  command: string
+}
+
+interface NodeProvisioningCommandResponse {
+  data: NodeProvisioningCommand
+}
+
+export function generateNodeProvisioningCommand(
+  token: string,
+  id: string,
+  ttlMinutes?: number,
+): Promise<NodeProvisioningCommandResponse> {
+  const body = ttlMinutes ? { ttl_minutes: ttlMinutes } : undefined
+
+  return apiRequest<NodeProvisioningCommandResponse>(
+    `/api/nodes/${encodeURIComponent(id)}/provisioning-command`,
+    {
+      method: 'POST',
+      token,
+      body,
+    },
+  )
 }
 
 interface DeleteNodeResponse {
