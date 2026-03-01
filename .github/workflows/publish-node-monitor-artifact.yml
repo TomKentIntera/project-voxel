@@ -51,12 +51,11 @@ jobs:
             exit 1
           fi
 
-          ARCHIVE_PATH="${PROVISIONING_MONITOR_ARCHIVE_PATH:-node-agent/latest/node-monitor.zip}"
+          ARCHIVE_PATH="${PROVISIONING_MONITOR_ARCHIVE_PATH:-latest.zip}"
           AWS_REGION="${PROVISIONING_ARTIFACTS_AWS_REGION:-us-east-1}"
 
           echo "ARCHIVE_PATH=${ARCHIVE_PATH}" >> "${GITHUB_ENV}"
           echo "AWS_REGION=${AWS_REGION}" >> "${GITHUB_ENV}"
-          echo "VERSIONED_ARCHIVE_PATH=node-agent/releases/${GITHUB_SHA}/node-monitor.zip" >> "${GITHUB_ENV}"
 
       - name: Configure AWS credentials (OIDC role)
         if: ${{ vars.PROVISIONING_ARTIFACTS_AWS_ROLE_TO_ASSUME != '' }}
@@ -79,8 +78,6 @@ jobs:
 
           ARCHIVE_URI="s3://${PROVISIONING_ARTIFACTS_AWS_BUCKET}/${ARCHIVE_PATH}"
           ARCHIVE_SHA_URI="${ARCHIVE_URI}.sha256"
-          VERSIONED_ARCHIVE_URI="s3://${PROVISIONING_ARTIFACTS_AWS_BUCKET}/${VERSIONED_ARCHIVE_PATH}"
-          VERSIONED_ARCHIVE_SHA_URI="${VERSIONED_ARCHIVE_URI}.sha256"
           SHA256="$(cat build/node-monitor.zip.sha256)"
 
           aws s3 cp build/node-monitor.zip "${ARCHIVE_URI}" \
@@ -95,23 +92,10 @@ jobs:
             --cache-control "no-cache, no-store, must-revalidate" \
             --metadata "commit_sha=${GITHUB_SHA}"
 
-          aws s3 cp build/node-monitor.zip "${VERSIONED_ARCHIVE_URI}" \
-            --only-show-errors \
-            --content-type application/zip \
-            --cache-control "no-cache, no-store, must-revalidate" \
-            --metadata "commit_sha=${GITHUB_SHA}"
-
-          aws s3 cp build/node-monitor.zip.sha256 "${VERSIONED_ARCHIVE_SHA_URI}" \
-            --only-show-errors \
-            --content-type text/plain \
-            --cache-control "no-cache, no-store, must-revalidate" \
-            --metadata "commit_sha=${GITHUB_SHA}"
-
           {
             echo "### Node monitor artifact published"
             echo
             echo "- Archive path: \`${ARCHIVE_PATH}\`"
-            echo "- Versioned path: \`${VERSIONED_ARCHIVE_PATH}\`"
             echo "- SHA256: \`${SHA256}\`"
             echo
             echo "Set orchestrator env values:"

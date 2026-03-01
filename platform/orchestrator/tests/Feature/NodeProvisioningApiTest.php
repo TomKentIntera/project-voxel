@@ -220,7 +220,7 @@ class NodeProvisioningApiTest extends TestCase
         ]);
         config()->set('services.provisioning.monitor_archive_url', '');
         config()->set('services.provisioning.monitor_archive_disk', 'provisioning_artifacts');
-        config()->set('services.provisioning.monitor_archive_path', 'node-agent/latest/node-monitor.zip');
+        config()->set('services.provisioning.monitor_archive_path', 'latest.zip');
         config()->set('services.provisioning.monitor_archive_public_url', true);
         config()->set('services.provisioning.monitor_archive_entrypoint', 'main.py');
         config()->set('filesystems.disks.provisioning_artifacts', [
@@ -231,12 +231,9 @@ class NodeProvisioningApiTest extends TestCase
             'throw' => false,
             'report' => false,
         ]);
+        Storage::disk('provisioning_artifacts')->put('latest.zip', 'fake-zip-data');
         Storage::disk('provisioning_artifacts')->put(
-            'node-agent/latest/node-monitor.zip',
-            'fake-zip-data'
-        );
-        Storage::disk('provisioning_artifacts')->put(
-            'node-agent/latest/node-monitor.zip.sha256',
+            'latest.zip.sha256',
             'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb'
         );
 
@@ -285,10 +282,10 @@ class NodeProvisioningApiTest extends TestCase
         $this->assertNotSame('', $bootstrapPath);
 
         $script = (string) $this->get((string) $bootstrapPath)->getContent();
-        $expectedArchiveUrl = Storage::disk('provisioning_artifacts')->url('node-agent/latest/node-monitor.zip');
+        $expectedArchiveUrl = Storage::disk('provisioning_artifacts')->url('latest.zip');
 
         $this->assertStringContainsString('curl -fsSL', $script);
-        $this->assertStringContainsString('node-agent/latest/node-monitor.zip', $script);
+        $this->assertStringContainsString('latest.zip', $script);
         $this->assertStringContainsString($expectedArchiveUrl, $script);
         $this->assertStringContainsString('sha256sum -c -', $script);
         $this->assertStringContainsString(

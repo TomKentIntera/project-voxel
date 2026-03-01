@@ -47,7 +47,7 @@ return [
         'orchestrator_base_url' => env('PROVISIONING_ORCHESTRATOR_BASE_URL'),
         'monitor_archive_url' => env('PROVISIONING_MONITOR_ARCHIVE_URL'),
         'monitor_archive_disk' => env('PROVISIONING_MONITOR_ARCHIVE_DISK', 'provisioning_artifacts'),
-        'monitor_archive_path' => env('PROVISIONING_MONITOR_ARCHIVE_PATH', 'node-agent/latest/node-monitor.zip'),
+        'monitor_archive_path' => env('PROVISIONING_MONITOR_ARCHIVE_PATH', 'latest.zip'),
         'monitor_archive_public_url' => env('PROVISIONING_MONITOR_ARCHIVE_PUBLIC_URL', false),
         'monitor_archive_url_ttl_minutes' => (int) env('PROVISIONING_MONITOR_ARCHIVE_URL_TTL_MINUTES', 60),
         'monitor_archive_sha256' => env('PROVISIONING_MONITOR_ARCHIVE_SHA256'),
