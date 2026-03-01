@@ -203,6 +203,13 @@ class NodeProvisioningController extends Controller
             $archiveEntrypoint = trim((string) config('services.provisioning.monitor_archive_entrypoint', 'main.py'));
             $archiveChecksum = trim((string) config('services.provisioning.monitor_archive_sha256', ''));
 
+            if ($archiveChecksum === '') {
+                $archiveChecksum = $this->resolveMonitorArchiveChecksumFromDisk(
+                    trim((string) config('services.provisioning.monitor_archive_disk', '')),
+                    trim((string) config('services.provisioning.monitor_archive_path', ''))
+                ) ?? '';
+            }
+
             return [
                 'type' => 'archive_url',
                 'value' => $archiveUrlFromDisk,
@@ -292,6 +299,41 @@ class NodeProvisioningController extends Controller
             // Fall back to a plain URL when temporary URLs are unavailable.
             return $disk->url($archivePath);
         }
+    }
+
+    private function resolveMonitorArchiveChecksumFromDisk(string $archiveDisk, string $archivePath): ?string
+    {
+        if ($archiveDisk === '' || $archivePath === '') {
+            return null;
+        }
+
+        $checksumPath = $archivePath.'.sha256';
+        $disk = Storage::disk($archiveDisk);
+
+        try {
+            if (! $disk->exists($checksumPath)) {
+                return null;
+            }
+
+            $rawChecksum = trim((string) $disk->get($checksumPath));
+        } catch (Throwable) {
+            return null;
+        }
+
+        if ($rawChecksum === '') {
+            return null;
+        }
+
+        $parts = preg_split('/\s+/', $rawChecksum);
+        $candidate = is_array($parts) ? trim((string) ($parts[0] ?? '')) : '';
+
+        if ($candidate === '') {
+            return null;
+        }
+
+        return preg_match('/^[a-f0-9]{64}$/i', $candidate) === 1
+            ? strtolower($candidate)
+            : null;
     }
 
     /**

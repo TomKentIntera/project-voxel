@@ -235,6 +235,10 @@ class NodeProvisioningApiTest extends TestCase
             'node-agent/latest/node-monitor.zip',
             'fake-zip-data'
         );
+        Storage::disk('provisioning_artifacts')->put(
+            'node-agent/latest/node-monitor.zip.sha256',
+            'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb'
+        );
 
         Http::fake([
             'https://panel.example.test/api/application/nodes/777/configuration' => Http::response([
@@ -286,6 +290,11 @@ class NodeProvisioningApiTest extends TestCase
         $this->assertStringContainsString('curl -fsSL', $script);
         $this->assertStringContainsString('node-agent/latest/node-monitor.zip', $script);
         $this->assertStringContainsString($expectedArchiveUrl, $script);
+        $this->assertStringContainsString('sha256sum -c -', $script);
+        $this->assertStringContainsString(
+            'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',
+            $script
+        );
         $this->assertStringContainsString("/opt/intera/orchestrator-monitor/.artifact/'main.py'", $script);
     }
 
