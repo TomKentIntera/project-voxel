@@ -109,7 +109,7 @@ class SyncNodeToPterodactylJobTest extends TestCase
         });
     }
 
-    public function test_it_marks_node_as_failed_when_panel_request_fails(): void
+    public function test_it_keeps_new_nodes_pending_when_initial_panel_contact_fails(): void
     {
         $node = Node::factory()->create([
             'sync_status' => Node::SYNC_STATUS_PENDING,
@@ -135,8 +135,43 @@ class SyncNodeToPterodactylJobTest extends TestCase
         }
 
         $node->refresh();
+        $this->assertSame(Node::SYNC_STATUS_PENDING, $node->sync_status);
+        $this->assertNull($node->sync_error);
+        $this->assertNull($node->synced_at);
+    }
+
+    public function test_it_marks_previously_synced_nodes_as_failed_when_panel_contact_fails(): void
+    {
+        $syncedAt = now()->subMinutes(10)->startOfSecond();
+
+        $node = Node::factory()->create([
+            'ptero_node_id' => 321,
+            'sync_status' => Node::SYNC_STATUS_SYNCED,
+            'sync_error' => null,
+            'synced_at' => $syncedAt,
+        ]);
+
+        Http::fake([
+            'https://panel.example.com/api/application/nodes/321/allocations*' => Http::response([
+                'errors' => [
+                    [
+                        'detail' => 'Upstream connection timeout.',
+                    ],
+                ],
+            ], 503),
+        ]);
+
+        try {
+            SyncNodeToPterodactylJob::dispatchSync($node->id);
+            $this->fail('Expected PterodactylApiException to be thrown.');
+        } catch (PterodactylApiException $exception) {
+            $this->assertSame(503, $exception->statusCode());
+        }
+
+        $node->refresh();
         $this->assertSame(Node::SYNC_STATUS_FAILED, $node->sync_status);
         $this->assertNotNull($node->sync_error);
-        $this->assertNull($node->synced_at);
+        $this->assertNotNull($node->synced_at);
+        $this->assertSame($syncedAt->getTimestamp(), $node->synced_at->getTimestamp());
     }
 }
