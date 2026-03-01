@@ -38,6 +38,8 @@ class SyncNodeToPterodactylJob implements ShouldQueue
             return;
         }
 
+        $hadSuccessfulSync = $this->hadSuccessfulSync($node);
+
         $node->forceFill([
             'sync_status' => Node::SYNC_STATUS_SYNCING,
             'sync_error' => null,
@@ -54,13 +56,25 @@ class SyncNodeToPterodactylJob implements ShouldQueue
                 'synced_at' => now(),
             ])->save();
         } catch (Throwable $exception) {
-            $node->forceFill([
-                'sync_status' => Node::SYNC_STATUS_FAILED,
-                'sync_error' => $this->truncateError($exception->getMessage()),
-            ])->save();
+            if ($hadSuccessfulSync) {
+                $node->forceFill([
+                    'sync_status' => Node::SYNC_STATUS_FAILED,
+                    'sync_error' => $this->truncateError($exception->getMessage()),
+                ])->save();
+            } else {
+                $node->forceFill([
+                    'sync_status' => Node::SYNC_STATUS_PENDING,
+                    'sync_error' => null,
+                ])->save();
+            }
 
             throw $exception;
         }
+    }
+
+    private function hadSuccessfulSync(Node $node): bool
+    {
+        return $node->synced_at !== null || $node->sync_status === Node::SYNC_STATUS_SYNCED;
     }
 
     private function ensurePanelNodeExists(Node $node, PterodactylApiClient $pterodactylApiClient): int
