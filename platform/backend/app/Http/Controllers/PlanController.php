@@ -7,6 +7,7 @@ namespace App\Http\Controllers;
 use App\Services\LocationsCacheReader;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use OpenApi\Annotations as OA;
 
 class PlanController extends Controller
 {
@@ -16,6 +17,37 @@ class PlanController extends Controller
 
     /**
      * Return all available plans with public-facing data.
+     *
+     * @OA\Get(
+     *     path="/api/plans",
+     *     operationId="getPlans",
+     *     tags={"Plans"},
+     *     summary="List public plan catalogue and recommender options",
+     *     @OA\Response(
+     *         response=200,
+     *         description="Public plans payload",
+     *         @OA\JsonContent(
+     *             type="object",
+     *             required={"plans", "locations", "planRecommender", "modpacks"},
+     *             @OA\Property(
+     *                 property="plans",
+     *                 type="array",
+     *                 @OA\Items(ref="#/components/schemas/PublicPlan")
+     *             ),
+     *             @OA\Property(
+     *                 property="locations",
+     *                 type="array",
+     *                 @OA\Items(ref="#/components/schemas/LocationOption")
+     *             ),
+     *             @OA\Property(property="planRecommender", ref="#/components/schemas/PlanRecommender"),
+     *             @OA\Property(
+     *                 property="modpacks",
+     *                 type="array",
+     *                 @OA\Items(ref="#/components/schemas/ModpackSummary")
+     *             )
+     *         )
+     *     )
+     * )
      */
     public function index(): JsonResponse
     {
@@ -87,6 +119,53 @@ class PlanController extends Controller
     /**
      * Accept players, version, and type selections, sum their weights to
      * determine the recommended GB, then return the best-fit plan.
+     *
+     * @OA\Get(
+     *     path="/api/plans/recommend",
+     *     operationId="recommendPlan",
+     *     tags={"Plans"},
+     *     summary="Get recommended plan from weighted selections",
+     *     @OA\Parameter(
+     *         name="players",
+     *         in="query",
+     *         required=true,
+     *         description="Selected player count range label from planRecommender.players.",
+     *         @OA\Schema(type="string", example="10-20")
+     *     ),
+     *     @OA\Parameter(
+     *         name="version",
+     *         in="query",
+     *         required=true,
+     *         description="Selected version range label from planRecommender.versions.",
+     *         @OA\Schema(type="string", example="1.17+")
+     *     ),
+     *     @OA\Parameter(
+     *         name="type",
+     *         in="query",
+     *         required=true,
+     *         description="Selected server type label from planRecommender.types.",
+     *         @OA\Schema(type="string", example="Forge Modpack")
+     *     ),
+     *     @OA\Response(
+     *         response=200,
+     *         description="Recommended plan and computed score",
+     *         @OA\JsonContent(ref="#/components/schemas/PlanRecommendation")
+     *     ),
+     *     @OA\Response(
+     *         response=422,
+     *         description="Invalid query data or unsupported selection",
+     *         @OA\JsonContent(
+     *             oneOf={
+     *                 @OA\Schema(ref="#/components/schemas/ApiValidationErrors"),
+     *                 @OA\Schema(
+     *                     type="object",
+     *                     required={"error"},
+     *                     @OA\Property(property="error", type="string", example="Invalid selection.")
+     *                 )
+     *             }
+     *         )
+     *     )
+     * )
      */
     public function recommend(Request $request): JsonResponse
     {
