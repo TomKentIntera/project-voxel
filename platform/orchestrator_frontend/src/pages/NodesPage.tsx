@@ -4,7 +4,11 @@ import Header from '../components/Header'
 import Pagination from '../components/Pagination'
 import { useAuth } from '../context/useAuth'
 import { useNodes } from '../hooks/useNodes'
-import { createNode, deleteNode } from '../lib/nodesApi'
+import {
+  createNode,
+  deleteNode,
+  generateNodeProvisioningCommand,
+} from '../lib/nodesApi'
 
 function formatDateTime(value: string | null): string {
   if (!value) return '-'
@@ -18,56 +22,181 @@ function formatDateTime(value: string | null): string {
   })
 }
 
+interface SetupCommandResult {
+  nodeId: string
+  command: string
+  expiresAt: string
+}
+
+interface SetupFormState {
+  id: string
+  name: string
+  region: string
+  ipAddress: string
+  pteroLocationId: string
+  fqdn: string
+  scheme: 'http' | 'https'
+  behindProxy: boolean
+  memory: string
+  memoryOverallocate: string
+  disk: string
+  diskOverallocate: string
+  uploadSize: string
+  daemonSftp: string
+  daemonListen: string
+  allocationIp: string
+  allocationAlias: string
+  allocationPorts: string
+}
+
+const DEFAULT_SETUP_FORM: SetupFormState = {
+  id: '',
+  name: '',
+  region: '',
+  ipAddress: '',
+  pteroLocationId: '1',
+  fqdn: '',
+  scheme: 'https',
+  behindProxy: true,
+  memory: '32768',
+  memoryOverallocate: '0',
+  disk: '204800',
+  diskOverallocate: '0',
+  uploadSize: '500',
+  daemonSftp: '2022',
+  daemonListen: '8080',
+  allocationIp: '',
+  allocationAlias: '',
+  allocationPorts: '25565-25580',
+}
+
+function parseInteger(value: string, options: { min?: number } = {}): number | null {
+  const trimmed = value.trim()
+  if (!/^-?\d+$/.test(trimmed)) return null
+
+  const parsed = Number(trimmed)
+  if (!Number.isInteger(parsed)) return null
+  if (options.min !== undefined && parsed < options.min) return null
+  return parsed
+}
+
+function parseAllocationPorts(raw: string): string[] {
+  return raw
+    .split(/[\s,]+/)
+    .map((entry) => entry.trim())
+    .filter((entry) => entry.length > 0)
+}
+
 export default function NodesPage() {
   const { token } = useAuth()
   const { nodes, meta, isLoading, error, setSearch, setPage, reload } = useNodes()
   const [searchValue, setSearchValue] = useState('')
-  const [id, setId] = useState('')
-  const [name, setName] = useState('')
-  const [region, setRegion] = useState('')
-  const [ipAddress, setIpAddress] = useState('')
+  const [setupForm, setSetupForm] = useState<SetupFormState>(DEFAULT_SETUP_FORM)
   const [isCreating, setIsCreating] = useState(false)
+  const [isGeneratingCommand, setIsGeneratingCommand] = useState(false)
   const [createError, setCreateError] = useState<string | null>(null)
   const [deleteError, setDeleteError] = useState<string | null>(null)
   const [deletingNodeId, setDeletingNodeId] = useState<string | null>(null)
-  const [createdNodeToken, setCreatedNodeToken] = useState<{
-    id: string
-    token: string
-  } | null>(null)
+  const [setupCommand, setSetupCommand] = useState<SetupCommandResult | null>(null)
 
-  const canCreate = useMemo(
-    () => name.trim() !== '' && region.trim() !== '' && ipAddress.trim() !== '',
-    [name, region, ipAddress],
-  )
+  const canCreate = useMemo(() => {
+    if (
+      setupForm.name.trim() === '' ||
+      setupForm.region.trim() === '' ||
+      setupForm.ipAddress.trim() === '' ||
+      setupForm.fqdn.trim() === ''
+    ) {
+      return false
+    }
+
+    const requiredIntegers: Array<number | null> = [
+      parseInteger(setupForm.pteroLocationId, { min: 1 }),
+      parseInteger(setupForm.memory, { min: 1 }),
+      parseInteger(setupForm.disk, { min: 1 }),
+      parseInteger(setupForm.uploadSize, { min: 1 }),
+      parseInteger(setupForm.daemonSftp, { min: 1 }),
+      parseInteger(setupForm.daemonListen, { min: 1 }),
+      parseInteger(setupForm.memoryOverallocate),
+      parseInteger(setupForm.diskOverallocate),
+    ]
+
+    if (requiredIntegers.some((value) => value === null)) {
+      return false
+    }
+
+    return parseAllocationPorts(setupForm.allocationPorts).length > 0
+  }, [setupForm])
 
   const handleCreate = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault()
     if (!token || !canCreate) return
 
     setIsCreating(true)
+    setIsGeneratingCommand(false)
     setCreateError(null)
+    setSetupCommand(null)
 
     try {
+      const pteroLocationId = parseInteger(setupForm.pteroLocationId, { min: 1 })
+      const memory = parseInteger(setupForm.memory, { min: 1 })
+      const memoryOverallocate = parseInteger(setupForm.memoryOverallocate)
+      const disk = parseInteger(setupForm.disk, { min: 1 })
+      const diskOverallocate = parseInteger(setupForm.diskOverallocate)
+      const uploadSize = parseInteger(setupForm.uploadSize, { min: 1 })
+      const daemonSftp = parseInteger(setupForm.daemonSftp, { min: 1 })
+      const daemonListen = parseInteger(setupForm.daemonListen, { min: 1 })
+      const allocationPorts = parseAllocationPorts(setupForm.allocationPorts)
+
+      if (
+        pteroLocationId === null ||
+        memory === null ||
+        memoryOverallocate === null ||
+        disk === null ||
+        diskOverallocate === null ||
+        uploadSize === null ||
+        daemonSftp === null ||
+        daemonListen === null ||
+        allocationPorts.length === 0
+      ) {
+        throw new Error('Please provide valid node setup values.')
+      }
+
       const response = await createNode(token, {
-        id: id.trim() || undefined,
-        name: name.trim(),
-        region: region.trim(),
-        ip_address: ipAddress.trim(),
+        id: setupForm.id.trim() || undefined,
+        name: setupForm.name.trim(),
+        region: setupForm.region.trim(),
+        ip_address: setupForm.ipAddress.trim(),
+        ptero_location_id: pteroLocationId,
+        fqdn: setupForm.fqdn.trim(),
+        scheme: setupForm.scheme,
+        behind_proxy: setupForm.behindProxy,
+        memory,
+        memory_overallocate: memoryOverallocate,
+        disk,
+        disk_overallocate: diskOverallocate,
+        upload_size: uploadSize,
+        daemon_sftp: daemonSftp,
+        daemon_listen: daemonListen,
+        allocation_ip: setupForm.allocationIp.trim() || setupForm.ipAddress.trim(),
+        allocation_alias: setupForm.allocationAlias.trim() || undefined,
+        allocation_ports: allocationPorts,
       })
 
-      setCreatedNodeToken({
-        id: response.data.id,
-        token: response.data.node_token,
+      setIsGeneratingCommand(true)
+      const commandResponse = await generateNodeProvisioningCommand(token, response.data.id)
+
+      setSetupCommand({
+        nodeId: response.data.id,
+        command: commandResponse.data.command,
+        expiresAt: commandResponse.data.expires_at,
       })
-      setId('')
-      setName('')
-      setRegion('')
-      setIpAddress('')
+      setSetupForm(DEFAULT_SETUP_FORM)
 
       await reload()
     } catch (err) {
       setCreateError(err instanceof Error ? err.message : 'Failed to create node')
     } finally {
+      setIsGeneratingCommand(false)
       setIsCreating(false)
     }
   }
@@ -97,25 +226,30 @@ export default function NodesPage() {
     <>
       <Header
         title="Nodes"
-        description="View, add, and remove orchestrator telemetry nodes"
+        description="View, provision, and remove orchestrator telemetry nodes"
       />
 
       <div className="space-y-6 p-8">
         <div className="rounded-xl border border-slate-200 bg-white p-6">
-          <h2 className="text-base font-semibold text-slate-900">Add Node</h2>
+          <h2 className="text-base font-semibold text-slate-900">Set Up Node</h2>
           <p className="mt-1 text-sm text-slate-500">
-            Register a node and generate a one-time telemetry token.
+            Create the node and generate the one-time bootstrap command to run on the target machine.
           </p>
 
-          <form onSubmit={handleCreate} className="mt-4 grid grid-cols-1 gap-4 lg:grid-cols-4">
+          <form onSubmit={handleCreate} className="mt-4 grid grid-cols-1 gap-4 xl:grid-cols-4">
             <div>
               <label className="mb-1 block text-xs font-medium uppercase tracking-wider text-slate-500">
                 Node ID (optional)
               </label>
               <input
                 type="text"
-                value={id}
-                onChange={(event) => setId(event.target.value)}
+                value={setupForm.id}
+                onChange={(event) =>
+                  setSetupForm((prev) => ({
+                    ...prev,
+                    id: event.target.value,
+                  }))
+                }
                 placeholder="auto-generate"
                 className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm placeholder:text-slate-400 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
               />
@@ -126,8 +260,13 @@ export default function NodesPage() {
               </label>
               <input
                 type="text"
-                value={name}
-                onChange={(event) => setName(event.target.value)}
+                value={setupForm.name}
+                onChange={(event) =>
+                  setSetupForm((prev) => ({
+                    ...prev,
+                    name: event.target.value,
+                  }))
+                }
                 placeholder="Frankfurt Wings Node"
                 className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm placeholder:text-slate-400 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
               />
@@ -138,8 +277,13 @@ export default function NodesPage() {
               </label>
               <input
                 type="text"
-                value={region}
-                onChange={(event) => setRegion(event.target.value)}
+                value={setupForm.region}
+                onChange={(event) =>
+                  setSetupForm((prev) => ({
+                    ...prev,
+                    region: event.target.value,
+                  }))
+                }
                 placeholder="eu.de"
                 className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm placeholder:text-slate-400 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
               />
@@ -150,19 +294,273 @@ export default function NodesPage() {
               </label>
               <input
                 type="text"
-                value={ipAddress}
-                onChange={(event) => setIpAddress(event.target.value)}
+                value={setupForm.ipAddress}
+                onChange={(event) =>
+                  setSetupForm((prev) => ({
+                    ...prev,
+                    ipAddress: event.target.value,
+                  }))
+                }
                 placeholder="203.0.113.10"
                 className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm placeholder:text-slate-400 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
               />
             </div>
-            <div className="lg:col-span-4">
+
+            <div>
+              <label className="mb-1 block text-xs font-medium uppercase tracking-wider text-slate-500">
+                Panel Location ID
+              </label>
+              <input
+                type="number"
+                min={1}
+                value={setupForm.pteroLocationId}
+                onChange={(event) =>
+                  setSetupForm((prev) => ({
+                    ...prev,
+                    pteroLocationId: event.target.value,
+                  }))
+                }
+                className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+              />
+            </div>
+            <div>
+              <label className="mb-1 block text-xs font-medium uppercase tracking-wider text-slate-500">
+                FQDN
+              </label>
+              <input
+                type="text"
+                value={setupForm.fqdn}
+                onChange={(event) =>
+                  setSetupForm((prev) => ({
+                    ...prev,
+                    fqdn: event.target.value,
+                  }))
+                }
+                placeholder="wings-eu-de.example.com"
+                className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm placeholder:text-slate-400 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+              />
+            </div>
+            <div>
+              <label className="mb-1 block text-xs font-medium uppercase tracking-wider text-slate-500">
+                Scheme
+              </label>
+              <select
+                value={setupForm.scheme}
+                onChange={(event) =>
+                  setSetupForm((prev) => ({
+                    ...prev,
+                    scheme: event.target.value as 'http' | 'https',
+                  }))
+                }
+                className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+              >
+                <option value="https">https</option>
+                <option value="http">http</option>
+              </select>
+            </div>
+            <div className="flex items-center rounded-lg border border-slate-300 bg-slate-50 px-3 py-2">
+              <input
+                id="behind_proxy"
+                type="checkbox"
+                checked={setupForm.behindProxy}
+                onChange={(event) =>
+                  setSetupForm((prev) => ({
+                    ...prev,
+                    behindProxy: event.target.checked,
+                  }))
+                }
+                className="size-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
+              />
+              <label htmlFor="behind_proxy" className="ml-2 text-sm text-slate-700">
+                Behind Proxy
+              </label>
+            </div>
+
+            <div>
+              <label className="mb-1 block text-xs font-medium uppercase tracking-wider text-slate-500">
+                Memory (MB)
+              </label>
+              <input
+                type="number"
+                min={1}
+                value={setupForm.memory}
+                onChange={(event) =>
+                  setSetupForm((prev) => ({
+                    ...prev,
+                    memory: event.target.value,
+                  }))
+                }
+                className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+              />
+            </div>
+            <div>
+              <label className="mb-1 block text-xs font-medium uppercase tracking-wider text-slate-500">
+                Memory Overallocate (%)
+              </label>
+              <input
+                type="number"
+                value={setupForm.memoryOverallocate}
+                onChange={(event) =>
+                  setSetupForm((prev) => ({
+                    ...prev,
+                    memoryOverallocate: event.target.value,
+                  }))
+                }
+                className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+              />
+            </div>
+            <div>
+              <label className="mb-1 block text-xs font-medium uppercase tracking-wider text-slate-500">
+                Disk (MB)
+              </label>
+              <input
+                type="number"
+                min={1}
+                value={setupForm.disk}
+                onChange={(event) =>
+                  setSetupForm((prev) => ({
+                    ...prev,
+                    disk: event.target.value,
+                  }))
+                }
+                className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+              />
+            </div>
+            <div>
+              <label className="mb-1 block text-xs font-medium uppercase tracking-wider text-slate-500">
+                Disk Overallocate (%)
+              </label>
+              <input
+                type="number"
+                value={setupForm.diskOverallocate}
+                onChange={(event) =>
+                  setSetupForm((prev) => ({
+                    ...prev,
+                    diskOverallocate: event.target.value,
+                  }))
+                }
+                className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+              />
+            </div>
+
+            <div>
+              <label className="mb-1 block text-xs font-medium uppercase tracking-wider text-slate-500">
+                Upload Size (MB)
+              </label>
+              <input
+                type="number"
+                min={1}
+                value={setupForm.uploadSize}
+                onChange={(event) =>
+                  setSetupForm((prev) => ({
+                    ...prev,
+                    uploadSize: event.target.value,
+                  }))
+                }
+                className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+              />
+            </div>
+            <div>
+              <label className="mb-1 block text-xs font-medium uppercase tracking-wider text-slate-500">
+                Daemon SFTP Port
+              </label>
+              <input
+                type="number"
+                min={1}
+                max={65535}
+                value={setupForm.daemonSftp}
+                onChange={(event) =>
+                  setSetupForm((prev) => ({
+                    ...prev,
+                    daemonSftp: event.target.value,
+                  }))
+                }
+                className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+              />
+            </div>
+            <div>
+              <label className="mb-1 block text-xs font-medium uppercase tracking-wider text-slate-500">
+                Daemon Listen Port
+              </label>
+              <input
+                type="number"
+                min={1}
+                max={65535}
+                value={setupForm.daemonListen}
+                onChange={(event) =>
+                  setSetupForm((prev) => ({
+                    ...prev,
+                    daemonListen: event.target.value,
+                  }))
+                }
+                className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+              />
+            </div>
+            <div>
+              <label className="mb-1 block text-xs font-medium uppercase tracking-wider text-slate-500">
+                Allocation IP (optional)
+              </label>
+              <input
+                type="text"
+                value={setupForm.allocationIp}
+                onChange={(event) =>
+                  setSetupForm((prev) => ({
+                    ...prev,
+                    allocationIp: event.target.value,
+                  }))
+                }
+                placeholder="defaults to node IP"
+                className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm placeholder:text-slate-400 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+              />
+            </div>
+
+            <div>
+              <label className="mb-1 block text-xs font-medium uppercase tracking-wider text-slate-500">
+                Allocation Alias (optional)
+              </label>
+              <input
+                type="text"
+                value={setupForm.allocationAlias}
+                onChange={(event) =>
+                  setSetupForm((prev) => ({
+                    ...prev,
+                    allocationAlias: event.target.value,
+                  }))
+                }
+                placeholder="wings-eu-de"
+                className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm placeholder:text-slate-400 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+              />
+            </div>
+            <div className="xl:col-span-3">
+              <label className="mb-1 block text-xs font-medium uppercase tracking-wider text-slate-500">
+                Allocation Ports
+              </label>
+              <input
+                type="text"
+                value={setupForm.allocationPorts}
+                onChange={(event) =>
+                  setSetupForm((prev) => ({
+                    ...prev,
+                    allocationPorts: event.target.value,
+                  }))
+                }
+                placeholder="25565-25580, 30500"
+                className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm placeholder:text-slate-400 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+              />
+              <p className="mt-1 text-xs text-slate-500">Use commas or spaces. Ranges are supported.</p>
+            </div>
+
+            <div className="xl:col-span-4">
               <button
                 type="submit"
-                disabled={!canCreate || isCreating}
+                disabled={!canCreate || isCreating || isGeneratingCommand}
                 className="inline-flex items-center rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-50"
               >
-                {isCreating ? 'Creating...' : 'Create Node'}
+                {isCreating
+                  ? 'Creating node...'
+                  : isGeneratingCommand
+                    ? 'Generating command...'
+                    : 'Create Node & Generate Command'}
               </button>
             </div>
           </form>
@@ -173,17 +571,17 @@ export default function NodesPage() {
             </div>
           )}
 
-          {createdNodeToken && (
+          {setupCommand && (
             <div className="mt-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3">
-              <p className="text-sm font-medium text-amber-800">
-                Node created: {createdNodeToken.id}
+              <p className="text-sm font-medium text-amber-900">
+                Node created: {setupCommand.nodeId}
               </p>
               <p className="mt-1 text-xs text-amber-700">
-                Save this token now. It is only shown once.
+                Run this on the new node host. Expires at {formatDateTime(setupCommand.expiresAt)}.
               </p>
-              <p className="mt-2 break-all rounded bg-white px-3 py-2 font-mono text-xs text-slate-700">
-                {createdNodeToken.token}
-              </p>
+              <pre className="mt-2 overflow-x-auto rounded bg-white px-3 py-2 font-mono text-xs text-slate-700">
+                {setupCommand.command}
+              </pre>
             </div>
           )}
         </div>
