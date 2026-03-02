@@ -19,6 +19,8 @@ class EventConsumerJob implements ShouldQueue
     use SerializesModels;
 
     /**
+     * $processorKey identifies the app-local processor implementation to run.
+     *
      * @param array<string, mixed> $eventPayload
      */
     public function __construct(

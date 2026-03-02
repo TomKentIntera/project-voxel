@@ -46,9 +46,10 @@ scripts/platform-start.sh --force-provision
 scripts/event-bus-terraform.sh local apply --auto-approve
 ```
 
-`orchestrator-worker` runs `php artisan events:consume-server-ordered`.
+`orchestrator-event-consumer` runs `php artisan events:consume-server-ordered`.
+`orchestrator-worker` runs `php artisan queue:work`.
 `backend-event-consumer` runs `php artisan events:consume-server-lifecycle`.
-Both consumers dispatch app-local `EventConsumerJob` jobs that resolve `event_type` to app-local handlers.
+Both consumers dispatch app-local `EventConsumerJob` jobs asynchronously (`dispatch`) and resolve `event_type` to app-local handlers.
 
 ## AWS setup
 

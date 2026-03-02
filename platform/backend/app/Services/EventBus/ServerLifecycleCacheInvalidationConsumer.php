@@ -197,7 +197,7 @@ class ServerLifecycleCacheInvalidationConsumer
         }
 
         foreach ($processorKeys as $processorKey) {
-            EventConsumerJob::dispatchSync($processorKey, $eventPayload);
+            EventConsumerJob::dispatch($processorKey, $eventPayload);
         }
 
         return true;
