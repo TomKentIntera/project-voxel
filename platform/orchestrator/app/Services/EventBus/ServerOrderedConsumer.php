@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace App\Services\EventBus;
 
-use App\Jobs\ProcessServerLifecycleEventProcessor;
+use App\Jobs\EventConsumerJob;
 use Illuminate\Http\Client\Response;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
@@ -195,7 +195,7 @@ class ServerOrderedConsumer
         }
 
         foreach ($processorKeys as $processorKey) {
-            ProcessServerLifecycleEventProcessor::dispatchSync($processorKey, $eventPayload);
+            EventConsumerJob::dispatch($processorKey, $eventPayload);
         }
 
         return true;
@@ -229,6 +229,11 @@ class ServerOrderedConsumer
 
     private function queueUrl(): string
     {
+        $destinationQueueUrl = trim((string) config('services.event_bus.destination_queue_url', ''));
+        if ($destinationQueueUrl !== '') {
+            return $destinationQueueUrl;
+        }
+
         return trim((string) config('services.event_bus.server_orders_queue_url', ''));
     }
 
