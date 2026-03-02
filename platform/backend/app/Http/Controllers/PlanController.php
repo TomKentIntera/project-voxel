@@ -28,7 +28,7 @@ class PlanController extends Controller
      *         description="Public plans payload",
      *         @OA\JsonContent(
      *             type="object",
-     *             required={"plans", "locations", "planRecommender", "modpacks"},
+     *             required={"plans", "locations", "planRecommender", "modpacks", "subdomain_domains"},
      *             @OA\Property(
      *                 property="plans",
      *                 type="array",
@@ -44,6 +44,11 @@ class PlanController extends Controller
      *                 property="modpacks",
      *                 type="array",
      *                 @OA\Items(ref="#/components/schemas/ModpackSummary")
+     *             ),
+     *             @OA\Property(
+     *                 property="subdomain_domains",
+     *                 type="array",
+     *                 @OA\Items(type="string", example="intera.gg")
      *             )
      *         )
      *     )
@@ -108,11 +113,19 @@ class PlanController extends Controller
             ];
         })->values()->all();
 
+        $subdomainDomains = collect(config('subdomains.allowed_domains', []))
+            ->filter(fn (mixed $domain): bool => is_string($domain) && trim($domain) !== '')
+            ->map(fn (string $domain): string => strtolower(trim($domain)))
+            ->unique()
+            ->values()
+            ->all();
+
         return response()->json([
             'plans' => $plans,
             'locations' => $locations,
             'planRecommender' => config('plans.planRecommender'),
             'modpacks' => $modpacks,
+            'subdomain_domains' => $subdomainDomains,
         ]);
     }
 

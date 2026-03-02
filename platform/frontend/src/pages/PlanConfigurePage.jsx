@@ -8,10 +8,14 @@ import { useAuth } from '../context/useAuth'
 import { createServerPurchaseSession } from '../utils/serversApi'
 import { getErrorMessage } from '../utils/getErrorMessage'
 import {
+  buildSubdomainDomainOptions,
   buildLocationOptions,
   findPlanByName,
+  isValidSubdomainPrefix,
   MINECRAFT_VERSION_OPTIONS,
   SERVER_TYPE_OPTIONS,
+  sanitizeSubdomainPrefix,
+  SUBDOMAIN_PREFIX_MAX_LENGTH,
 } from './planConfigurePage.helpers'
 
 import '../styles/bootstrap.min.css'
@@ -21,11 +25,13 @@ import '../styles/legacy-responsive.css'
 export default function PlanConfigurePage() {
   const { planName } = useParams()
   const { token } = useAuth()
-  const { plans, locations, isLoading, currencySymbol, getPlanPrice } = usePlans()
+  const { plans, locations, subdomainDomains, isLoading, currencySymbol, getPlanPrice } = usePlans()
   const [serverName, setServerName] = useState('My Server')
   const [location, setLocation] = useState('')
   const [minecraftVersion, setMinecraftVersion] = useState('')
   const [serverType, setServerType] = useState('')
+  const [subdomainPrefix, setSubdomainPrefix] = useState('')
+  const [subdomainDomain, setSubdomainDomain] = useState('')
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [errorMessage, setErrorMessage] = useState('')
 
@@ -37,6 +43,19 @@ export default function PlanConfigurePage() {
     () => buildLocationOptions(selectedPlan, locations),
     [locations, selectedPlan],
   )
+  const subdomainDomainOptions = useMemo(
+    () => buildSubdomainDomainOptions(subdomainDomains),
+    [subdomainDomains],
+  )
+  const normalizedSubdomainPrefix = useMemo(
+    () => sanitizeSubdomainPrefix(subdomainPrefix),
+    [subdomainPrefix],
+  )
+  const hasValidSubdomainPrefix = isValidSubdomainPrefix(normalizedSubdomainPrefix)
+  const subdomainPreview =
+    hasValidSubdomainPrefix && subdomainDomain
+      ? `${normalizedSubdomainPrefix}.${subdomainDomain}`
+      : ''
 
   if (isLoading) {
     return <p className="auth-loading">Loading selected plan...</p>
@@ -47,7 +66,13 @@ export default function PlanConfigurePage() {
   }
 
   const canCreateServer = Boolean(
-    token && location && minecraftVersion && serverType && !isSubmitting,
+    token &&
+      location &&
+      minecraftVersion &&
+      serverType &&
+      hasValidSubdomainPrefix &&
+      subdomainDomain &&
+      !isSubmitting,
   )
 
   const submitPurchase = async (event) => {
@@ -68,6 +93,8 @@ export default function PlanConfigurePage() {
           location,
           minecraft_version: minecraftVersion,
           type: serverType,
+          subdomain_prefix: normalizedSubdomainPrefix,
+          subdomain_domain: subdomainDomain,
         },
         token,
       )
@@ -174,6 +201,39 @@ export default function PlanConfigurePage() {
                       onChange={(event) => setServerName(event.target.value)}
                     />
                   </div>
+
+                  <div className="mt-20">
+                    <Input
+                      label="Choose your subdomain prefix"
+                      id="server-subdomain-prefix"
+                      labelClassName="ui-select-label"
+                      value={subdomainPrefix}
+                      maxLength={SUBDOMAIN_PREFIX_MAX_LENGTH}
+                      placeholder="e.g. myserver"
+                      onChange={(event) =>
+                        setSubdomainPrefix(sanitizeSubdomainPrefix(event.target.value))
+                      }
+                    />
+                    <p className="text-white mt-10 mb-0">
+                      Use letters and numbers only, up to {SUBDOMAIN_PREFIX_MAX_LENGTH}{' '}
+                      characters.
+                    </p>
+                  </div>
+
+                  <Select
+                    label="Choose your domain"
+                    id="server-subdomain-domain"
+                    placeholder="Select a domain"
+                    value={subdomainDomain}
+                    onChange={(event) => setSubdomainDomain(event.target.value)}
+                    options={subdomainDomainOptions}
+                  />
+
+                  {subdomainPreview && (
+                    <p className="text-white mt-10 mb-0">
+                      Your server address will be <strong>{subdomainPreview}</strong>
+                    </p>
+                  )}
 
                   <Select
                     label="Where would you like the server to be located?"

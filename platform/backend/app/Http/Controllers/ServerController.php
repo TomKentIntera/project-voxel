@@ -6,11 +6,14 @@ namespace App\Http\Controllers;
 
 use App\Services\PterodactylPanelLinkService;
 use App\Services\Stripe\Services\StripeCheckoutSessionService;
+use Illuminate\Database\QueryException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
+use Illuminate\Validation\Rule;
 use Interadigital\CoreModels\Enums\ServerStatus;
 use Interadigital\CoreModels\Models\Server;
+use Interadigital\CoreModels\Models\Subdomain;
 use Interadigital\CoreModels\Models\User;
 use InvalidArgumentException;
 use Throwable;
@@ -50,13 +53,14 @@ class ServerController extends Controller
     public function index(Request $request): JsonResponse
     {
         $user = $request->user();
-        $servers = $user->servers()->orderByDesc('created_at')->get();
+        $servers = $user->servers()->with('subdomain')->orderByDesc('created_at')->get();
 
         $planMap = collect(config('plans.planList', []))->keyBy('name');
 
         $items = $servers->map(function ($server) use ($planMap) {
             $config = $server->config ? json_decode($server->config, true) : null;
             $plan = $planMap->get($server->plan);
+            $subdomain = $server->subdomain;
 
             return [
                 'id' => $server->id,
@@ -70,6 +74,11 @@ class ServerController extends Controller
                     'name' => $plan['name'],
                     'title' => $plan['title'],
                     'ram' => $plan['ram'],
+                ] : null,
+                'subdomain' => $subdomain ? [
+                    'prefix' => $subdomain->prefix,
+                    'domain' => $subdomain->domain,
+                    'hostname' => $subdomain->hostname,
                 ] : null,
             ];
         });
@@ -264,6 +273,24 @@ class ServerController extends Controller
             ], 401);
         }
 
+        $allowedSubdomainDomains = collect(config('subdomains.allowed_domains', []))
+            ->filter(fn (mixed $domain): bool => is_string($domain) && trim($domain) !== '')
+            ->map(fn (string $domain): string => strtolower(trim($domain)))
+            ->unique()
+            ->values()
+            ->all();
+
+        if ($allowedSubdomainDomains === []) {
+            return response()->json([
+                'message' => 'Subdomain domains are not configured.',
+            ], 503);
+        }
+
+        $request->merge([
+            'subdomain_prefix' => strtolower(trim((string) $request->input('subdomain_prefix', ''))),
+            'subdomain_domain' => strtolower(trim((string) $request->input('subdomain_domain', ''))),
+        ]);
+
         $validated = $request->validate([
             'plan' => ['required', 'string'],
             'name' => ['nullable', 'string', 'max:64'],
@@ -271,6 +298,11 @@ class ServerController extends Controller
             'minecraft_version' => ['required', 'string', 'max:64'],
             'type' => ['required', 'string', 'max:64'],
             'type_version' => ['nullable', 'string', 'max:128'],
+            'subdomain_prefix' => ['required', 'string', 'max:24', 'regex:/^[a-z0-9]+$/'],
+            'subdomain_domain' => ['required', 'string', Rule::in($allowedSubdomainDomains)],
+        ], [
+            'subdomain_prefix.regex' => 'Subdomain prefix must be alphanumeric.',
+            'subdomain_domain.in' => 'Selected subdomain domain is invalid.',
         ]);
 
         $planName = strtolower(trim((string) $validated['plan']));
@@ -294,6 +326,18 @@ class ServerController extends Controller
             ], 422);
         }
 
+        $subdomainPrefix = (string) $validated['subdomain_prefix'];
+        $subdomainDomain = (string) $validated['subdomain_domain'];
+
+        if (Subdomain::query()
+            ->where('prefix', $subdomainPrefix)
+            ->where('domain', $subdomainDomain)
+            ->exists()) {
+            return response()->json([
+                'message' => 'Selected subdomain is already taken.',
+            ], 422);
+        }
+
         $serverConfig = [
             'name' => trim((string) ($validated['name'] ?? '')) !== ''
                 ? trim((string) $validated['name'])
@@ -302,6 +346,11 @@ class ServerController extends Controller
             'minecraft_version' => (string) $validated['minecraft_version'],
             'type' => (string) $validated['type'],
             'type_version' => $validated['type_version'] ?? null,
+            'subdomain' => [
+                'prefix' => $subdomainPrefix,
+                'domain' => $subdomainDomain,
+                'hostname' => sprintf('%s.%s', $subdomainPrefix, $subdomainDomain),
+            ],
         ];
 
         $server = Server::query()->create([
@@ -315,6 +364,28 @@ class ServerController extends Controller
             'suspended' => false,
             'status' => ServerStatus::NEW->value,
         ]);
+
+        try {
+            Subdomain::query()->create([
+                'server_id' => (int) $server->id,
+                'prefix' => $subdomainPrefix,
+                'domain' => $subdomainDomain,
+            ]);
+        } catch (QueryException $exception) {
+            $server->delete();
+
+            if ($this->isUniqueConstraintViolation($exception)) {
+                return response()->json([
+                    'message' => 'Selected subdomain is already taken.',
+                ], 422);
+            }
+
+            report($exception);
+
+            return response()->json([
+                'message' => 'Unable to reserve selected subdomain.',
+            ], 502);
+        }
 
         $completeBaseUrl = rtrim((string) config('stripe.checkout_complete_base_url'), '/');
         $successUrl = $completeBaseUrl.'/'.(string) $server->uuid.'?session_id={CHECKOUT_SESSION_ID}';
@@ -358,6 +429,13 @@ class ServerController extends Controller
             'server_uuid' => (string) $server->uuid,
             'checkout_url' => $checkoutUrl,
         ], 201);
+    }
+
+    private function isUniqueConstraintViolation(QueryException $exception): bool
+    {
+        $sqlState = (string) ($exception->errorInfo[0] ?? '');
+
+        return in_array($sqlState, ['23000', '23505'], true);
     }
 }
 

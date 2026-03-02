@@ -8,6 +8,7 @@ use Illuminate\Http\Client\Request as HttpClientRequest;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Str;
 use Interadigital\CoreModels\Models\Server;
+use Interadigital\CoreModels\Models\Subdomain;
 use Interadigital\CoreModels\Models\User;
 use Mockery\MockInterface;
 use Stripe\Checkout\Session;
@@ -16,6 +17,16 @@ use Tests\TestCase;
 class ServerApiTest extends TestCase
 {
     use RefreshDatabase;
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+
+        config()->set('subdomains.allowed_domains', [
+            'intera.gg',
+            'intera.localhost',
+        ]);
+    }
 
     public function test_servers_index_route_requires_authentication(): void
     {
@@ -41,6 +52,11 @@ class ServerApiTest extends TestCase
             'config' => json_encode(['name' => 'Builder World']),
             'plan' => 'panda',
             'created_at' => now()->subMinute(),
+        ]);
+        Subdomain::query()->create([
+            'server_id' => $mappedServer->id,
+            'prefix' => 'builderworld',
+            'domain' => 'intera.gg',
         ]);
 
         $unnamedServer = Server::factory()->create([
@@ -71,12 +87,16 @@ class ServerApiTest extends TestCase
         $this->assertSame($unnamedServer->uuid, $servers[0]['uuid']);
         $this->assertSame('Unnamed Server', $servers[0]['name']);
         $this->assertNull($servers[0]['plan']);
+        $this->assertNull($servers[0]['subdomain']);
 
         $this->assertSame($mappedServer->uuid, $servers[1]['uuid']);
         $this->assertSame('Builder World', $servers[1]['name']);
         $this->assertSame('panda', $servers[1]['plan']['name']);
         $this->assertSame('Panda', $servers[1]['plan']['title']);
         $this->assertSame(2, $servers[1]['plan']['ram']);
+        $this->assertSame('builderworld', $servers[1]['subdomain']['prefix']);
+        $this->assertSame('intera.gg', $servers[1]['subdomain']['domain']);
+        $this->assertSame('builderworld.intera.gg', $servers[1]['subdomain']['hostname']);
     }
 
     public function test_owner_can_fetch_server_panel_url(): void
@@ -248,6 +268,8 @@ class ServerApiTest extends TestCase
                 'location' => 'de',
                 'minecraft_version' => '1.21.1',
                 'type' => 'paper',
+                'subdomain_prefix' => 'Skyblock123',
+                'subdomain_domain' => 'intera.gg',
             ]);
 
         $response
@@ -265,6 +287,15 @@ class ServerApiTest extends TestCase
         $this->assertSame('de', $config['location'] ?? null);
         $this->assertSame('1.21.1', $config['minecraft_version'] ?? null);
         $this->assertSame('paper', $config['type'] ?? null);
+        $this->assertSame('skyblock123', $config['subdomain']['prefix'] ?? null);
+        $this->assertSame('intera.gg', $config['subdomain']['domain'] ?? null);
+        $this->assertSame('skyblock123.intera.gg', $config['subdomain']['hostname'] ?? null);
+
+        $this->assertDatabaseHas('subdomains', [
+            'server_id' => $server->id,
+            'prefix' => 'skyblock123',
+            'domain' => 'intera.gg',
+        ]);
     }
 
     public function test_purchase_route_rejects_location_not_available_for_plan(): void
@@ -283,6 +314,8 @@ class ServerApiTest extends TestCase
                 'location' => 'ca',
                 'minecraft_version' => '1.21.1',
                 'type' => 'paper',
+                'subdomain_prefix' => 'skyblock123',
+                'subdomain_domain' => 'intera.gg',
             ])
             ->assertStatus(422)
             ->assertJson([
@@ -290,6 +323,97 @@ class ServerApiTest extends TestCase
             ]);
 
         $this->assertDatabaseCount('servers', 0);
+    }
+
+    public function test_purchase_route_rejects_subdomain_domain_not_in_allowed_list(): void
+    {
+        $this->mock(StripeCheckoutSessionService::class, function (MockInterface $mock): void {
+            $mock->shouldNotReceive('createSubscriptionCheckoutSession');
+        });
+
+        $user = User::factory()->create();
+        $token = $this->issueJwt($user);
+
+        $this->withHeader('Authorization', 'Bearer '.$token)
+            ->postJson('/api/servers/purchase', [
+                'plan' => 'parrot',
+                'name' => 'Skyblock Server',
+                'location' => 'de',
+                'minecraft_version' => '1.21.1',
+                'type' => 'paper',
+                'subdomain_prefix' => 'skyblock123',
+                'subdomain_domain' => 'example.com',
+            ])
+            ->assertStatus(422)
+            ->assertJsonValidationErrors(['subdomain_domain']);
+
+        $this->assertDatabaseCount('servers', 0);
+        $this->assertDatabaseCount('subdomains', 0);
+    }
+
+    public function test_purchase_route_rejects_non_alphanumeric_subdomain_prefix(): void
+    {
+        $this->mock(StripeCheckoutSessionService::class, function (MockInterface $mock): void {
+            $mock->shouldNotReceive('createSubscriptionCheckoutSession');
+        });
+
+        $user = User::factory()->create();
+        $token = $this->issueJwt($user);
+
+        $this->withHeader('Authorization', 'Bearer '.$token)
+            ->postJson('/api/servers/purchase', [
+                'plan' => 'parrot',
+                'name' => 'Skyblock Server',
+                'location' => 'de',
+                'minecraft_version' => '1.21.1',
+                'type' => 'paper',
+                'subdomain_prefix' => 'skyblock-123',
+                'subdomain_domain' => 'intera.gg',
+            ])
+            ->assertStatus(422)
+            ->assertJsonValidationErrors(['subdomain_prefix']);
+
+        $this->assertDatabaseCount('servers', 0);
+        $this->assertDatabaseCount('subdomains', 0);
+    }
+
+    public function test_purchase_route_rejects_taken_subdomain_combination(): void
+    {
+        $this->mock(StripeCheckoutSessionService::class, function (MockInterface $mock): void {
+            $mock->shouldNotReceive('createSubscriptionCheckoutSession');
+        });
+
+        $owner = User::factory()->create();
+        $existingServer = Server::factory()->create([
+            'user_id' => $owner->id,
+            'uuid' => (string) Str::uuid(),
+        ]);
+        Subdomain::query()->create([
+            'server_id' => $existingServer->id,
+            'prefix' => 'takenname',
+            'domain' => 'intera.gg',
+        ]);
+
+        $user = User::factory()->create();
+        $token = $this->issueJwt($user);
+
+        $this->withHeader('Authorization', 'Bearer '.$token)
+            ->postJson('/api/servers/purchase', [
+                'plan' => 'parrot',
+                'name' => 'Skyblock Server',
+                'location' => 'de',
+                'minecraft_version' => '1.21.1',
+                'type' => 'paper',
+                'subdomain_prefix' => 'TakenName',
+                'subdomain_domain' => 'intera.gg',
+            ])
+            ->assertStatus(422)
+            ->assertJson([
+                'message' => 'Selected subdomain is already taken.',
+            ]);
+
+        $this->assertDatabaseCount('servers', 1);
+        $this->assertDatabaseCount('subdomains', 1);
     }
 
     public function test_owner_can_fetch_server_provisioning_status(): void

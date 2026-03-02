@@ -16,6 +16,7 @@ async function fetchPlans() {
     locations: locationsMap,
     planRecommender: data.planRecommender,
     modpacks: data.modpacks ?? [],
+    subdomainDomains: data.subdomain_domains ?? ['intera.gg', 'intera.localhost'],
   }
 }
 
@@ -59,6 +60,7 @@ export function usePlans() {
     locations: query.data?.locations ?? {},
     planRecommender: query.data?.planRecommender ?? { players: [], versions: [], types: [] },
     modpacks: query.data?.modpacks ?? [],
+    subdomainDomains: query.data?.subdomainDomains ?? ['intera.gg', 'intera.localhost'],
     currency,
     currencySymbol,
     getPlanPrice: (planName) => getPlanPrice(plans, planName, currency),

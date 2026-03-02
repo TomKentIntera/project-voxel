@@ -55,6 +55,8 @@ describe('createServerPurchaseSession', () => {
       location: 'de',
       minecraft_version: '1.21.1',
       type: 'paper',
+      subdomain_prefix: 'myserver',
+      subdomain_domain: 'intera.gg',
     }
 
     await expect(createServerPurchaseSession(serverPayload, 'jwt-token')).resolves.toEqual({
