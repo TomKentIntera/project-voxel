@@ -71,6 +71,7 @@ services:
       AWS_ENDPOINT: http://localstack:4566
       AWS_USE_PATH_STYLE_ENDPOINT: "true"
       EVENT_BUS_SERVER_ORDERS_TOPIC_ARN: arn:aws:sns:us-east-1:000000000000:server-orders
+      EVENT_BUS_DESTINATION_QUEUE_URL: http://localstack:4566/000000000000/server-lifecycle-backend
       EVENT_BUS_SERVER_LIFECYCLE_QUEUE_URL: http://localstack:4566/000000000000/server-lifecycle-backend
       LOCATIONS_CACHE_DISK: locations_cache
       LOCATIONS_CACHE_PATH: locations.json
@@ -116,6 +117,7 @@ services:
       AWS_ENDPOINT: http://localstack:4566
       AWS_USE_PATH_STYLE_ENDPOINT: "true"
       EVENT_BUS_SERVER_ORDERS_TOPIC_ARN: arn:aws:sns:us-east-1:000000000000:server-orders
+      EVENT_BUS_DESTINATION_QUEUE_URL: http://localstack:4566/000000000000/server-lifecycle-backend
       EVENT_BUS_SERVER_LIFECYCLE_QUEUE_URL: http://localstack:4566/000000000000/server-lifecycle-backend
       LOCATIONS_CACHE_DISK: locations_cache
       LOCATIONS_CACHE_PATH: locations.json
@@ -151,6 +153,7 @@ services:
       AWS_ENDPOINT: http://localstack:4566
       AWS_USE_PATH_STYLE_ENDPOINT: "true"
       EVENT_BUS_SERVER_ORDERS_TOPIC_ARN: arn:aws:sns:us-east-1:000000000000:server-orders
+      EVENT_BUS_DESTINATION_QUEUE_URL: http://localstack:4566/000000000000/server-lifecycle-backend
       EVENT_BUS_SERVER_LIFECYCLE_QUEUE_URL: http://localstack:4566/000000000000/server-lifecycle-backend
       LOCATIONS_CACHE_DISK: locations_cache
       LOCATIONS_CACHE_PATH: locations.json
@@ -186,6 +189,7 @@ services:
       AWS_ENDPOINT: http://localstack:4566
       AWS_USE_PATH_STYLE_ENDPOINT: "true"
       EVENT_BUS_SERVER_ORDERS_TOPIC_ARN: arn:aws:sns:us-east-1:000000000000:server-orders
+      EVENT_BUS_DESTINATION_QUEUE_URL: http://localstack:4566/000000000000/server-orders-orchestrator
       EVENT_BUS_SERVER_ORDERS_QUEUE_URL: http://localstack:4566/000000000000/server-orders-orchestrator
       LOCATIONS_CACHE_DISK: locations_cache
       LOCATIONS_CACHE_PATH: locations.json
@@ -230,6 +234,7 @@ services:
       AWS_ENDPOINT: http://localstack:4566
       AWS_USE_PATH_STYLE_ENDPOINT: "true"
       EVENT_BUS_SERVER_ORDERS_TOPIC_ARN: arn:aws:sns:us-east-1:000000000000:server-orders
+      EVENT_BUS_DESTINATION_QUEUE_URL: http://localstack:4566/000000000000/server-orders-orchestrator
       EVENT_BUS_SERVER_ORDERS_QUEUE_URL: http://localstack:4566/000000000000/server-orders-orchestrator
       LOCATIONS_CACHE_DISK: locations_cache
       LOCATIONS_CACHE_PATH: locations.json
