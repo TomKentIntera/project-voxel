@@ -144,9 +144,6 @@ pterodactyl_admin_username="${PTERODACTYL_ADMIN_USERNAME:-tom}"
 pterodactyl_admin_first_name="${PTERODACTYL_ADMIN_FIRST_NAME:-Tom}"
 pterodactyl_admin_last_name="${PTERODACTYL_ADMIN_LAST_NAME:-Kent}"
 pterodactyl_admin_password="${PTERODACTYL_ADMIN_PASSWORD:-secret1234}"
-# This must match the app key material inserted into pterodactyl.api_keys for
-# local orchestrator provisioning, and can be mirrored in root .env.
-pterodactyl_application_api_key_fixed="${PTERODACTYL_APPLICATION_API_KEY:-ptla_yN9hRbzk2otKP7EQctxKHXY9E/FFB9nsFvkrQyi9mtktDEwS+HxInd3o9PXiwWetD4Y209JGQ1b/}"
 
 seed_pterodactyl_admin_user() {
   echo "Seeding Pterodactyl admin user (${pterodactyl_admin_email})..."
@@ -160,67 +157,84 @@ seed_pterodactyl_admin_user() {
     --no-interaction
 }
 
-upsert_pterodactyl_application_api_key() {
-  echo "Upserting fixed Pterodactyl application API key for local provisioning..."
+resolve_pterodactyl_application_api_key() {
+  if [ -n "${PTERODACTYL_APPLICATION_API_KEY:-}" ]; then
+    pterodactyl_application_api_key="$(printf '%s' "$PTERODACTYL_APPLICATION_API_KEY" | tr -d '\r\n')"
+    if [ -z "$pterodactyl_application_api_key" ]; then
+      echo "PTERODACTYL_APPLICATION_API_KEY was provided but is empty after trimming." >&2
+      exit 1
+    fi
+    echo "Using PTERODACTYL_APPLICATION_API_KEY from environment."
+    return 0
+  fi
 
-  docker compose exec -T mysql mysql -uroot -psecret pterodactyl <<SQL
-SET @admin_user_id := (
-  SELECT id
-  FROM users
-  WHERE email = '${pterodactyl_admin_email}'
-  ORDER BY id ASC
-  LIMIT 1
-);
+  echo "Generating Pterodactyl application API key for local provisioning..."
+  pterodactyl_application_api_key="$(
+    docker compose exec -T \
+      -e PTERODACTYL_PROVISION_ADMIN_EMAIL="$pterodactyl_admin_email" \
+      pterodactyl-panel php <<'PHP'
+<?php
+require '/app/vendor/autoload.php';
 
-DELETE FROM api_keys
-WHERE memo = 'Local orchestrator provisioning key'
-  AND key_type = 2;
+$app = require '/app/bootstrap/app.php';
+$kernel = $app->make(Illuminate\Contracts\Console\Kernel::class);
+$kernel->bootstrap();
 
-INSERT INTO api_keys (
-  user_id,
-  key_type,
-  identifier,
-  token,
-  allowed_ips,
-  memo,
-  created_at,
-  updated_at,
-  r_servers,
-  r_nodes,
-  r_allocations,
-  r_users,
-  r_locations,
-  r_nests,
-  r_eggs,
-  r_database_hosts,
-  r_server_databases
-)
-VALUES (
-  @admin_user_id,
-  2,
-  'ptla_yN9hRbzk2ot',
-  'eyJpdiI6IkplWU04Y0lGVWlNanM3Wm1rMitJQ2c9PSIsInZhbHVlIjoiS1A3RVFjdHhLSFhZOUUvRlFCOW5zRnZrclF5aTltdGtERXdTK0h4SW5kM285UFhpd1dldEQ0WTIwOUpGQTFiLyIsIm1hYyI6ImQ4YjZhZDgwM2M5ZWEyZmI0MmZkNGQyODIyMzhiNjU3NDJiNTVkZTgxZTNhZThkNDhlZjMyNmM1MzNiMDVmMGYiLCJ0YWciOiIifQ==',
-  '[]',
-  'Local orchestrator provisioning key',
-  UTC_TIMESTAMP(),
-  UTC_TIMESTAMP(),
-  3,
-  3,
-  3,
-  3,
-  3,
-  3,
-  3,
-  3,
-  3
-);
-SQL
+$adminEmail = trim((string) getenv('PTERODACTYL_PROVISION_ADMIN_EMAIL'));
+if ($adminEmail === '') {
+    fwrite(STDERR, 'Missing panel admin email for API key generation.'.PHP_EOL);
+    exit(1);
+}
+
+$user = Pterodactyl\Models\User::query()->where('email', $adminEmail)->first();
+if ($user === null) {
+    fwrite(STDERR, sprintf('Could not find panel admin user [%s] for API key generation.', $adminEmail).PHP_EOL);
+    exit(1);
+}
+
+$memo = 'Local orchestrator provisioning key';
+
+Pterodactyl\Models\ApiKey::query()
+    ->where('user_id', $user->id)
+    ->where('key_type', Pterodactyl\Models\ApiKey::TYPE_APPLICATION)
+    ->where('memo', $memo)
+    ->delete();
+
+$permissions = [
+    'r_servers' => 3,
+    'r_nodes' => 3,
+    'r_allocations' => 3,
+    'r_users' => 3,
+    'r_locations' => 3,
+    'r_nests' => 3,
+    'r_eggs' => 3,
+    'r_database_hosts' => 3,
+    'r_server_databases' => 3,
+];
+
+$key = $app->make(Pterodactyl\Services\Api\KeyCreationService::class)
+    ->setKeyType(Pterodactyl\Models\ApiKey::TYPE_APPLICATION)
+    ->handle([
+        'memo' => $memo,
+        'user_id' => $user->id,
+        'allowed_ips' => [],
+    ], $permissions);
+
+$token = $key->identifier.$app->make(Illuminate\Contracts\Encryption\Encrypter::class)->decrypt($key->token);
+fwrite(STDOUT, $token);
+PHP
+  )"
+
+  pterodactyl_application_api_key="$(printf '%s' "$pterodactyl_application_api_key" | tr -d '\r\n')"
+  if [ -z "$pterodactyl_application_api_key" ]; then
+    echo "Failed to generate a usable Pterodactyl application API key." >&2
+    exit 1
+  fi
 }
 
 run_pterodactyl_provisioning() {
   seed_pterodactyl_admin_user
-  upsert_pterodactyl_application_api_key
-  pterodactyl_application_api_key="$pterodactyl_application_api_key_fixed"
+  resolve_pterodactyl_application_api_key
 
   echo "Running local Pterodactyl/Wings provisioning..."
   docker compose exec -T \
