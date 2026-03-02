@@ -7,6 +7,10 @@ This project uses AWS-style eventing for cross-service communication:
 - **Transport**: SNS topic fanout to SQS queue
 - **Shared contracts/client**: `packages/php/core-events` (`AbstractEvent`, `ServerOrdered`, `EventBusClient`)
 
+Related orchestration design doc:
+
+- `docs/server-provisioning-orchestration.md` (detailed server provisioning sequence and class responsibilities)
+
 ## Resource model
 
 - SNS topic: `server-orders`
