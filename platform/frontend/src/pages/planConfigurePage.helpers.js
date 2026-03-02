@@ -16,6 +16,8 @@ export const MINECRAFT_VERSION_OPTIONS = [
   { value: '1.18.2', label: '1.18.2' },
 ]
 
+export const SUBDOMAIN_PREFIX_MAX_LENGTH = 24
+
 export function findPlanByName(plans = [], planName = '') {
   const normalizedPlanName = String(planName).trim().toLowerCase()
   if (!normalizedPlanName) return null
@@ -41,5 +43,34 @@ export function buildLocationOptions(plan, locations) {
       }
     })
     .filter(Boolean)
+}
+
+export function sanitizeSubdomainPrefix(value = '') {
+  return String(value)
+    .toLowerCase()
+    .replace(/[^a-z0-9]/g, '')
+    .slice(0, SUBDOMAIN_PREFIX_MAX_LENGTH)
+}
+
+export function isValidSubdomainPrefix(value = '') {
+  const normalized = String(value).trim().toLowerCase()
+  return (
+    normalized.length > 0 &&
+    normalized.length <= SUBDOMAIN_PREFIX_MAX_LENGTH &&
+    /^[a-z0-9]+$/.test(normalized)
+  )
+}
+
+export function buildSubdomainDomainOptions(domains = []) {
+  if (!Array.isArray(domains)) return []
+
+  return domains
+    .filter((domain) => typeof domain === 'string' && domain.trim() !== '')
+    .map((domain) => domain.trim().toLowerCase())
+    .filter((domain, index, allDomains) => allDomains.indexOf(domain) === index)
+    .map((domain) => ({
+      value: domain,
+      label: domain,
+    }))
 }
 

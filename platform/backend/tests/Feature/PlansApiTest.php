@@ -22,6 +22,11 @@ class PlansApiTest extends TestCase
             'ttl_seconds' => 60,
         ]);
 
+        config()->set('subdomains.allowed_domains', [
+            'intera.gg',
+            'intera.localhost',
+        ]);
+
         config()->set('plans.planList', [
             [
                 'name' => 'panda',
@@ -75,7 +80,9 @@ class PlansApiTest extends TestCase
             ->assertJsonPath('locations.1.key', 'fi')
             ->assertJsonPath('locations.1.flag', 'fi')
             ->assertJsonPath('locations.1.short', 'eu.fi')
-            ->assertJsonPath('locations.1.maxFreeMemory', 0);
+            ->assertJsonPath('locations.1.maxFreeMemory', 0)
+            ->assertJsonPath('subdomain_domains.0', 'intera.gg')
+            ->assertJsonPath('subdomain_domains.1', 'intera.localhost');
     }
 }
 

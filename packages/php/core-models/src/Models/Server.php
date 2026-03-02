@@ -10,6 +10,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Support\Facades\Config;
 use Interadigital\CoreModels\Database\Factories\ServerFactory;
 use Interadigital\CoreModels\Enums\ServerStatus;
@@ -52,6 +53,11 @@ class Server extends Model
     public function events(): HasMany
     {
         return $this->hasMany(ServerEvent::class, 'server_id', 'id');
+    }
+
+    public function subdomain(): HasOne
+    {
+        return $this->hasOne(Subdomain::class, 'server_id', 'id');
     }
 
     public function data(): Attribute
