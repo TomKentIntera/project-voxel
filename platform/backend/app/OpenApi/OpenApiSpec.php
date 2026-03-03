@@ -218,6 +218,15 @@ use OpenApi\Annotations as OA;
  * )
  *
  * @OA\Schema(
+ *     schema="ServerSubdomainSummary",
+ *     type="object",
+ *     required={"prefix", "domain", "hostname"},
+ *     @OA\Property(property="prefix", type="string", example="myserver"),
+ *     @OA\Property(property="domain", type="string", example="intera.gg"),
+ *     @OA\Property(property="hostname", type="string", example="myserver.intera.gg")
+ * )
+ *
+ * @OA\Schema(
  *     schema="ServerSummary",
  *     type="object",
  *     required={"id", "uuid", "name", "suspended", "status", "stripe_tx_return", "plan"},
@@ -228,7 +237,8 @@ use OpenApi\Annotations as OA;
  *     @OA\Property(property="suspended", type="boolean", example=false),
  *     @OA\Property(property="status", type="string", nullable=true, example="active"),
  *     @OA\Property(property="stripe_tx_return", type="boolean", example=true),
- *     @OA\Property(property="plan", ref="#/components/schemas/ServerPlanSummary", nullable=true)
+ *     @OA\Property(property="plan", ref="#/components/schemas/ServerPlanSummary", nullable=true),
+ *     @OA\Property(property="subdomain", ref="#/components/schemas/ServerSubdomainSummary", nullable=true)
  * )
  */
 final class OpenApiSpec

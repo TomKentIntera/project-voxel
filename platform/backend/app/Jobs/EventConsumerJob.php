@@ -11,7 +11,7 @@ use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
 
-class ProcessServerLifecycleEventProcessor implements ShouldQueue
+class EventConsumerJob implements ShouldQueue
 {
     use Dispatchable;
     use InteractsWithQueue;
@@ -19,6 +19,8 @@ class ProcessServerLifecycleEventProcessor implements ShouldQueue
     use SerializesModels;
 
     /**
+     * $processorKey identifies the app-local processor implementation to run.
+     *
      * @param array<string, mixed> $eventPayload
      */
     public function __construct(

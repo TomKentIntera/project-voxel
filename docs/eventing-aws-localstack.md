@@ -7,6 +7,10 @@ This project uses AWS-style eventing for cross-service communication:
 - **Transport**: SNS topic fanout to SQS queue
 - **Shared contracts/client**: `packages/php/core-events` (`AbstractEvent`, `ServerOrdered`, `EventBusClient`)
 
+Related orchestration design doc:
+
+- `docs/server-provisioning-orchestration.md` (detailed server provisioning sequence and class responsibilities)
+
 ## Resource model
 
 - SNS topic: `server-orders`
@@ -16,6 +20,8 @@ This project uses AWS-style eventing for cross-service communication:
 - SQS queue: `server-lifecycle-backend`
 - Subscription: `server-orders` -> `server-lifecycle-backend`
 - SQS DLQ: `server-lifecycle-backend-dlq`
+
+Each destination app consumes from one queue and then routes by `event_type` to app-local processors.
 
 Resources are provisioned via Terraform from:
 
@@ -44,8 +50,10 @@ scripts/platform-start.sh --force-provision
 scripts/event-bus-terraform.sh local apply --auto-approve
 ```
 
-`orchestrator-worker` runs `php artisan events:consume-server-ordered`.
+`orchestrator-event-consumer` runs `php artisan events:consume-server-ordered`.
+`orchestrator-worker` runs `php artisan queue:work`.
 `backend-event-consumer` runs `php artisan events:consume-server-lifecycle`.
+Both consumers dispatch app-local `EventConsumerJob` jobs asynchronously (`dispatch`) and resolve `event_type` to app-local handlers.
 
 ## AWS setup
 
@@ -71,6 +79,7 @@ Both Laravel apps now support these variables:
 - `AWS_ENDPOINT` (set to `http://localstack:4566` in Docker for local)
 - `AWS_USE_PATH_STYLE_ENDPOINT`
 - `EVENT_BUS_SERVER_ORDERS_TOPIC_ARN`
+- `EVENT_BUS_DESTINATION_QUEUE_URL` (preferred per-destination consumer queue URL)
 - `EVENT_BUS_SERVER_ORDERS_QUEUE_URL`
 - `EVENT_BUS_SERVER_LIFECYCLE_QUEUE_URL`
 

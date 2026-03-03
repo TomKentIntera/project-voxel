@@ -70,6 +70,7 @@ return [
             'server.ordered.v1' => env('EVENT_BUS_SERVER_ORDERS_TOPIC_ARN'),
         ],
         'server_orders_topic_arn' => env('EVENT_BUS_SERVER_ORDERS_TOPIC_ARN'),
+        'destination_queue_url' => env('EVENT_BUS_DESTINATION_QUEUE_URL', env('EVENT_BUS_SERVER_ORDERS_QUEUE_URL')),
         'server_orders_queue_url' => env('EVENT_BUS_SERVER_ORDERS_QUEUE_URL'),
         'region' => env('AWS_DEFAULT_REGION', 'us-east-1'),
         'key' => env('AWS_ACCESS_KEY_ID'),
