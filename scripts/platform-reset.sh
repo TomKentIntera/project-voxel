@@ -90,6 +90,7 @@ wait_for_php_service_port() {
   port="$2"
   max_attempts="${3:-120}"
   attempts=0
+  echo "Waiting for $service to accept connections on 127.0.0.1:$port..."
   until docker compose exec -T "$service" php -r "exit(@fsockopen('127.0.0.1', $port) ? 0 : 1);" >/dev/null 2>&1; do
     attempts=$((attempts + 1))
     if [ "$attempts" -ge "$max_attempts" ]; then
@@ -98,8 +99,38 @@ wait_for_php_service_port() {
       docker compose logs --tail=50 "$service" >&2 || true
       exit 1
     fi
+    if [ $((attempts % 10)) -eq 0 ]; then
+      echo "Still waiting on $service ($attempts/$max_attempts checks)..."
+    fi
     sleep 2
   done
+  echo "$service is ready."
+}
+
+wait_for_platform_services_ready() {
+  wait_for_php_service_port backend 8000 &
+  backend_pid=$!
+
+  wait_for_php_service_port orchestrator 8000 &
+  orchestrator_pid=$!
+
+  wait_for_php_service_port legacy 8080 &
+  legacy_pid=$!
+
+  wait_for_php_service_port pterodactyl-panel 80 &
+  pterodactyl_panel_pid=$!
+
+  failures=0
+  for pid in "$backend_pid" "$orchestrator_pid" "$legacy_pid" "$pterodactyl_panel_pid"; do
+    if ! wait "$pid"; then
+      failures=$((failures + 1))
+    fi
+  done
+
+  if [ "$failures" -gt 0 ]; then
+    echo "One or more services failed to become ready." >&2
+    exit 1
+  fi
 }
 
 destroy_wings_server_state() {
@@ -303,10 +334,7 @@ restart_wings() {
 
 start_required_services
 wait_for_mysql_ready
-wait_for_php_service_port backend 8000
-wait_for_php_service_port orchestrator 8000
-wait_for_php_service_port legacy 8080
-wait_for_php_service_port pterodactyl-panel 80
+wait_for_platform_services_ready
 
 if [ "$with_wings" = "true" ]; then
   destroy_wings_server_state
