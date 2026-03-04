@@ -13,6 +13,10 @@ return new class extends Migration
      */
     public function up(): void
     {
+        if (Schema::hasTable('subdomains')) {
+            return;
+        }
+
         Schema::create('subdomains', function (Blueprint $table) {
             $table->id();
             $table->foreignId('server_id')->unique()->constrained('servers')->cascadeOnDelete();
