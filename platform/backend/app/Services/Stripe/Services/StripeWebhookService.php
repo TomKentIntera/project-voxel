@@ -6,20 +6,25 @@ namespace App\Services\Stripe\Services;
 
 use App\Jobs\SendSlackNotification;
 use App\Notifications\Slack\ServerOrderedSlackNotification;
+use App\Services\Stripe\Repositories\StripeCustomerRepository;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 use Interadigital\CoreEvents\EventBus\EventBusClient;
 use Interadigital\CoreEvents\Events\ServerOrdered;
 use Interadigital\CoreModels\Enums\ServerEventType;
+use Interadigital\CoreModels\Models\ReferralTransaction;
 use Interadigital\CoreModels\Enums\ServerStatus;
 use Interadigital\CoreModels\Models\Server;
 use Interadigital\CoreModels\Models\ServerEvent;
+use Throwable;
 
 class StripeWebhookService
 {
     public function __construct(
-        private readonly EventBusClient $eventBusClient
+        private readonly EventBusClient $eventBusClient,
+        private readonly StripeCustomerRepository $stripeCustomerRepository
     ) {
     }
 
@@ -88,7 +93,12 @@ class StripeWebhookService
      */
     private function handleInvoicePaymentSucceeded(array $eventPayload): void
     {
-        $subscriptionId = $eventPayload['data']['object']['subscription'] ?? null;
+        $invoice = $eventPayload['data']['object'] ?? null;
+        if (! is_array($invoice)) {
+            return;
+        }
+
+        $subscriptionId = $invoice['subscription'] ?? null;
 
         if (! is_string($subscriptionId) || $subscriptionId === '') {
             return;
@@ -111,6 +121,8 @@ class StripeWebhookService
                 : ServerStatus::ACTIVE->value,
         ]);
         $server->save();
+
+        $this->applyReferralCreditIfEligible($server, $invoice);
 
         if (! $shouldPublishOrder) {
             return;
@@ -143,6 +155,95 @@ class StripeWebhookService
         SendSlackNotification::dispatch(
             new ServerOrderedSlackNotification((int) $server->id),
         );
+    }
+
+    /**
+     * @param array<string, mixed> $invoice
+     */
+    private function applyReferralCreditIfEligible(Server $server, array $invoice): void
+    {
+        if ((bool) $server->referral_paid || ! is_numeric($server->referral_id) || (int) $server->referral_id <= 0) {
+            return;
+        }
+
+        $amountPaidMinor = $invoice['amount_paid'] ?? null;
+        if (! is_int($amountPaidMinor) || $amountPaidMinor <= 0) {
+            return;
+        }
+
+        $currency = strtolower((string) ($invoice['currency'] ?? 'usd'));
+        if ($currency === '') {
+            $currency = 'usd';
+        }
+
+        DB::transaction(function () use ($server, $amountPaidMinor, $currency): void {
+            $lockedServer = Server::query()->lockForUpdate()->find($server->id);
+            if ($lockedServer === null) {
+                return;
+            }
+
+            if ((bool) $lockedServer->referral_paid || ! is_numeric($lockedServer->referral_id) || (int) $lockedServer->referral_id <= 0) {
+                return;
+            }
+
+            if (ReferralTransaction::query()->where('server_id', (int) $lockedServer->id)->exists()) {
+                $lockedServer->referral_paid = true;
+                $lockedServer->save();
+
+                return;
+            }
+
+            $referralCode = $lockedServer->referralcode()->first();
+            if ($referralCode === null || ! is_numeric($referralCode->user_id) || (int) $referralCode->user_id <= 0) {
+                return;
+            }
+
+            $referralPercent = (int) ($referralCode->referral_percent ?? 0);
+            if ($referralPercent <= 0) {
+                return;
+            }
+
+            $creditMinor = (int) floor($amountPaidMinor * ($referralPercent / 100));
+            if ($creditMinor <= 0) {
+                return;
+            }
+
+            $referrer = $referralCode->user()->first();
+            if ($referrer === null) {
+                return;
+            }
+
+            try {
+                $customer = $this->stripeCustomerRepository->getOrCreate($referrer);
+                $this->stripeCustomerRepository->applyCredit(
+                    (string) $customer->id,
+                    $creditMinor,
+                    $currency,
+                    sprintf(
+                        'Referral credit from server %s invoice payment',
+                        (string) $lockedServer->uuid
+                    ),
+                );
+            } catch (Throwable $exception) {
+                Log::warning('Failed to apply Stripe referral balance credit.', [
+                    'server_id' => (int) $lockedServer->id,
+                    'referral_id' => (int) $lockedServer->referral_id,
+                    'message' => $exception->getMessage(),
+                ]);
+
+                return;
+            }
+
+            ReferralTransaction::query()->create([
+                'user_id' => (int) $referrer->id,
+                'server_id' => (int) $lockedServer->id,
+                'referral_id' => (int) $referralCode->id,
+                'amount' => round($creditMinor / 100, 2),
+            ]);
+
+            $lockedServer->referral_paid = true;
+            $lockedServer->save();
+        });
     }
 
     /**

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Http\Controllers;
 
 use App\Services\PterodactylPanelLinkService;
+use App\Services\Referral\ReferralService;
 use App\Services\Stripe\Services\StripeCheckoutSessionService;
 use Illuminate\Database\QueryException;
 use Illuminate\Http\JsonResponse;
@@ -264,7 +265,8 @@ class ServerController extends Controller
      */
     public function purchase(
         Request $request,
-        StripeCheckoutSessionService $stripeCheckoutSessionService
+        StripeCheckoutSessionService $stripeCheckoutSessionService,
+        ReferralService $referralService
     ): JsonResponse {
         $user = $request->user();
         if (! $user instanceof User) {
@@ -300,6 +302,7 @@ class ServerController extends Controller
             'type_version' => ['nullable', 'string', 'max:128'],
             'subdomain_prefix' => ['required', 'string', 'max:24', 'regex:/^[a-z0-9]+$/'],
             'subdomain_domain' => ['required', 'string', Rule::in($allowedSubdomainDomains)],
+            'referral_code' => ['nullable', 'string', 'max:64'],
         ], [
             'subdomain_prefix.regex' => 'Subdomain prefix must be alphanumeric.',
             'subdomain_domain.in' => 'Selected subdomain domain is invalid.',
@@ -328,6 +331,8 @@ class ServerController extends Controller
 
         $subdomainPrefix = (string) $validated['subdomain_prefix'];
         $subdomainDomain = (string) $validated['subdomain_domain'];
+        $referralCodeInput = trim((string) ($validated['referral_code'] ?? ''));
+        $referralCode = null;
 
         if (Subdomain::query()
             ->where('prefix', $subdomainPrefix)
@@ -336,6 +341,23 @@ class ServerController extends Controller
             return response()->json([
                 'message' => 'Selected subdomain is already taken.',
             ], 422);
+        }
+
+        if ($referralCodeInput !== '') {
+            $referralCode = $referralService->findByCode($referralCodeInput);
+            if ($referralCode === null) {
+                return response()->json([
+                    'message' => 'Referral code is invalid.',
+                ], 422);
+            }
+
+            if ((int) $referralCode->user_id === (int) $user->id) {
+                return response()->json([
+                    'message' => 'You cannot use your own referral code.',
+                ], 422);
+            }
+
+            $referralCode = $referralService->ensureStripePromotionCode($referralCode);
         }
 
         $serverConfig = [
@@ -363,6 +385,7 @@ class ServerController extends Controller
             'user_id' => (int) $user->id,
             'suspended' => false,
             'status' => ServerStatus::NEW->value,
+            'referral_id' => $referralCode?->id,
         ]);
 
         try {
@@ -396,7 +419,7 @@ class ServerController extends Controller
                 (string) $plan['name'],
                 $successUrl,
                 null,
-                null,
+                is_string($referralCode?->stripe_coupon_code) ? $referralCode->stripe_coupon_code : null,
                 [
                     'server_uuid' => (string) $server->uuid,
                 ]

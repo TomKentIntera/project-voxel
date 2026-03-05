@@ -57,4 +57,15 @@ class StripeCustomerRepository
             ],
         ]);
     }
+
+    public function applyCredit(string $customerId, int $creditMinorAmount, string $currency, string $description): void
+    {
+        $client = $this->stripeClientFactory->make();
+        $client->customers->createBalanceTransaction($customerId, [
+            // Negative amounts are account credits in Stripe.
+            'amount' => -1 * abs($creditMinorAmount),
+            'currency' => strtolower($currency),
+            'description' => $description,
+        ]);
+    }
 }

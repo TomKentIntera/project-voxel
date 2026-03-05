@@ -7,6 +7,7 @@ import { usePlans } from '../hooks/usePlans'
 import { useAuth } from '../context/useAuth'
 import { createServerPurchaseSession } from '../utils/serversApi'
 import { getErrorMessage } from '../utils/getErrorMessage'
+import { getStoredReferralCode } from '../utils/referralStorage'
 import {
   buildSubdomainDomainOptions,
   buildLocationOptions,
@@ -86,6 +87,7 @@ export default function PlanConfigurePage() {
     setIsSubmitting(true)
 
     try {
+      const referralCode = getStoredReferralCode()
       const payload = await createServerPurchaseSession(
         {
           plan: selectedPlan.name,
@@ -95,6 +97,7 @@ export default function PlanConfigurePage() {
           type: serverType,
           subdomain_prefix: normalizedSubdomainPrefix,
           subdomain_domain: subdomainDomain,
+          referral_code: referralCode || undefined,
         },
         token,
       )

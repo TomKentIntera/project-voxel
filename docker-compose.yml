@@ -459,8 +459,8 @@ services:
       - /tmp/pterodactyl-logs:/tmp/pterodactyl-logs
       - /tmp/pterodactyl-tmp:/tmp/pterodactyl-tmp
     ports:
-      - "8080:8080"
-      - "2022:2022"
+      - "8081:8080"
+      - "2023:2022"
     depends_on:
       - pterodactyl-panel
     networks:

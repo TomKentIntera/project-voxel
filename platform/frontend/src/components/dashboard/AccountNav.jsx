@@ -29,6 +29,9 @@ export default function AccountNav() {
       <Link to="/plans">
         <i className="fas fa-server"></i> New Server
       </Link>
+      <Link to="/dashboard/referrals">
+        <i className="fas fa-user-friends"></i> Referrals
+      </Link>
       <button type="button" className="account-nav-logout" onClick={logout}>
         <i className="fas fa-door-open"></i> Logout
       </button>

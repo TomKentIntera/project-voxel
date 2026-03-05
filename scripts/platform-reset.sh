@@ -59,13 +59,11 @@ start_required_services() {
       docker compose up -d --build --force-recreate
     fi
   else
-    echo "Restarting platform containers (no full rebuild)..."
+    echo "Ensuring platform containers are running (no full rebuild)..."
     if [ "$with_wings" = "true" ]; then
-      docker compose --profile testing stop
-      docker compose --profile testing up -d
+      docker compose --profile testing up -d --remove-orphans
     else
-      docker compose stop
-      docker compose up -d
+      docker compose up -d --remove-orphans
     fi
     if [ "$with_wings" = "true" ]; then
       docker compose --profile testing up -d pterodactyl-wings

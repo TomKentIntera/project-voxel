@@ -4,6 +4,7 @@ import ProtectedRoute from './components/ProtectedRoute'
 import { AuthProvider } from './context/AuthContext'
 import DashboardPage from './pages/DashboardPage'
 import HomePage from './pages/HomePage'
+import InviteReferralPage from './pages/InviteReferralPage'
 import LoginPage from './pages/LoginPage'
 import RegisterPage from './pages/RegisterPage'
 import BillingCompletePage from './pages/BillingCompletePage'
@@ -11,6 +12,7 @@ import InitializePage from './pages/InitializePage'
 import PlansPage from './pages/PlansPage'
 import PlanConfigurePage from './pages/PlanConfigurePage'
 import ModpackPage from './pages/ModpackPage'
+import ReferralPage from './pages/ReferralPage'
 import FaqsPage from './pages/FaqsPage'
 import TermsPage from './pages/TermsPage'
 import PrivacyPolicyPage from './pages/PrivacyPolicyPage'
@@ -30,6 +32,7 @@ function App() {
       <Routes>
         <Route path="/" element={<HomePage />} />
         <Route path="/plans" element={<PlansPage />} />
+        <Route path="/invite/:referralCode" element={<InviteReferralPage />} />
         <Route
           path="/plan/configure/:planName"
           element={
@@ -72,6 +75,14 @@ function App() {
           element={
             <ProtectedRoute>
               <DashboardPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/dashboard/referrals"
+          element={
+            <ProtectedRoute>
+              <ReferralPage />
             </ProtectedRoute>
           }
         />

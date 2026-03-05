@@ -98,6 +98,22 @@ class User extends Authenticatable
     }
 
     /**
+     * @return HasMany<ReferralCode, $this>
+     */
+    public function referralCodes(): HasMany
+    {
+        return $this->hasMany(ReferralCode::class, 'user_id', 'id');
+    }
+
+    /**
+     * @return HasMany<ReferralTransaction, $this>
+     */
+    public function referralTransactions(): HasMany
+    {
+        return $this->hasMany(ReferralTransaction::class, 'user_id', 'id');
+    }
+
+    /**
      * @return HasMany<ServerEvent, $this>
      */
     public function actedServerEvents(): HasMany

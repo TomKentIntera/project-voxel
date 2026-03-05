@@ -5,6 +5,7 @@ use App\Http\Controllers\BannerController;
 use App\Http\Controllers\BillingController;
 use App\Http\Controllers\FaqController;
 use App\Http\Controllers\PlanController;
+use App\Http\Controllers\ReferralController;
 use App\Http\Controllers\ServerController;
 use App\Http\Controllers\StripeWebhookController;
 use Illuminate\Support\Facades\Route;
@@ -23,6 +24,7 @@ Route::middleware('auth.jwt')->group(function (): void {
     Route::post('/servers/{uuid}/purchase-confirmation', [ServerController::class, 'confirmPurchaseReturn']);
     Route::get('/servers/{uuid}/provisioning-status', [ServerController::class, 'provisioningStatus']);
     Route::get('/servers/{uuid}/panel-url', [ServerController::class, 'panelUrl']);
+    Route::get('/referrals/me', [ReferralController::class, 'me']);
     Route::post('/billing/portal-session', [BillingController::class, 'portalSession']);
 });
 
