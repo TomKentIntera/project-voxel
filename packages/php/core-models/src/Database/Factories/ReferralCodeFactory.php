@@ -30,8 +30,8 @@ class ReferralCodeFactory extends Factory
         return [
             'referral_code' => strtoupper(fake()->lexify('invite????')),
             'user_id' => User::factory(),
-            'discount_percent' => 50,
-            'referral_percent' => 15,
+            'discount_percent' => 10,
+            'referral_percent' => 10,
             'stripe_coupon_code' => null,
         ];
     }

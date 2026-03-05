@@ -10,6 +10,7 @@ use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 use Interadigital\CoreModels\Models\ReferralCode;
 use Interadigital\CoreModels\Models\ReferralTransaction;
+use Interadigital\CoreModels\Models\Server;
 use Interadigital\CoreModels\Models\User;
 use Throwable;
 
@@ -64,12 +65,33 @@ class ReferralService
         $earnedAllTime = (float) ReferralTransaction::query()
             ->where('user_id', (int) $user->id)
             ->sum('amount');
+        $revenueLast30Days = (float) ReferralTransaction::query()
+            ->where('user_id', (int) $user->id)
+            ->where('created_at', '>=', now()->subDays(30))
+            ->sum('amount');
+        $referredUserServersCount = (int) ReferralTransaction::query()
+            ->where('user_id', (int) $user->id)
+            ->distinct('server_id')
+            ->count('server_id');
+        $referredUsersCount = Server::query()
+            ->whereIn(
+                'id',
+                ReferralTransaction::query()
+                    ->where('user_id', (int) $user->id)
+                    ->select('server_id')
+            )
+            ->whereNotNull('user_id')
+            ->distinct('user_id')
+            ->count('user_id');
 
         return [
             'code' => (string) $referralCode->referral_code,
             'link' => $this->inviteLink((string) $referralCode->referral_code),
             'discount_percent' => (int) $referralCode->discount_percent,
             'referral_percent' => (int) $referralCode->referral_percent,
+            'referred_users_count' => $referredUsersCount,
+            'referred_user_servers_count' => $referredUserServersCount,
+            'revenue_last_30_days' => round($revenueLast30Days, 2),
             'earned_last_period' => round($earnedLastPeriod, 2),
             'earned_all_time' => round($earnedAllTime, 2),
             'period_days' => $periodDays,
@@ -99,12 +121,12 @@ class ReferralService
 
     private function defaultDiscountPercent(): int
     {
-        return max(1, min(100, (int) config('referral.default_discount_percent', 50)));
+        return max(1, min(100, (int) config('referral.default_discount_percent', 10)));
     }
 
     private function defaultReferralPercent(): int
     {
-        return max(1, min(100, (int) config('referral.default_referral_percent', 15)));
+        return max(1, min(100, (int) config('referral.default_referral_percent', 10)));
     }
 
     private function generateUniqueReferralCode(): string
@@ -196,6 +218,7 @@ class ReferralService
                 'amount' => round((float) $entry->amount, 2),
                 'created_at' => $entry->created_at?->toIso8601String(),
                 'server_uuid' => is_string($server?->uuid) ? $server->uuid : null,
+                'plan_purchased' => is_string($server?->plan) ? $server->plan : null,
                 'from_user' => $referredUser ? [
                     'id' => (int) $referredUser->id,
                     'name' => (string) $referredUser->name,
