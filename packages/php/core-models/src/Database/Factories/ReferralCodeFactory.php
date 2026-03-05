@@ -32,6 +32,7 @@ class ReferralCodeFactory extends Factory
             'user_id' => User::factory(),
             'discount_percent' => 10,
             'referral_percent' => 10,
+            'valid_for_invoice_count' => 3,
             'stripe_coupon_code' => null,
         ];
     }

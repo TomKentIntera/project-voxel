@@ -24,6 +24,7 @@ class ReferralTransaction extends Model
         'server_id',
         'referral_id',
         'amount',
+        'stripe_invoice_id',
     ];
 
     public function user(): BelongsTo

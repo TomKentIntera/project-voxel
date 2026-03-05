@@ -15,7 +15,6 @@
   border-radius: 10px;
   padding: 28px;
   color: var(--ref-text-primary);
-  border: 1px solid rgba(255, 255, 255, 0.14);
   margin-bottom: 24px;
 }
 
@@ -54,15 +53,15 @@
 .referral-copy-button {
   border: 0;
   border-radius: 8px;
-  background: var(--ref-cta-green);
-  color: var(--ref-text-primary);
+  background: #ffffff;
+  color: var(--ref-cta-green);
   font-weight: 600;
   padding: 0 18px;
   height: 44px;
 }
 
 .referral-copy-button:hover {
-  background: #29ab65;
+  background: #ecfff4;
 }
 
 .referral-copy-button:disabled {
@@ -80,6 +79,10 @@
   margin-bottom: 24px;
 }
 
+.referral-intro-card .ui-card-body {
+  padding: 20px 22px;
+}
+
 .referral-intro-card h3 {
   margin-top: 0;
   margin-bottom: 10px;
@@ -92,6 +95,10 @@
 }
 
 .referral-stat-card {
+  padding: 0;
+}
+
+.referral-stat-card-body {
   padding: 18px 16px;
   text-align: center;
 }
@@ -113,17 +120,27 @@
 }
 
 .referral-table-card {
-  padding: 18px;
+  padding: 0;
+}
+
+.referral-table-card .ui-card-header {
+  padding: 24px 24px 18px;
+}
+
+.referral-table-card .ui-card-body.referral-table-body {
+  padding: 0 24px 24px;
 }
 
 .referral-table-card h3 {
   margin-top: 0;
-  margin-bottom: 14px;
+  margin-bottom: 0;
   color: var(--ref-text-primary);
+  line-height: 1.2;
 }
 
 .referral-table {
-  margin-bottom: 0;
+  margin: 0 !important;
+  width: 100% !important;
 }
 
 .referral-table thead th {
@@ -139,9 +156,58 @@
   border-top: 1px solid #2c3c66;
 }
 
+.referral-table thead th:first-child,
+.referral-table tbody td:first-child {
+  padding-left: 14px;
+}
+
+.referral-table thead th:last-child,
+.referral-table tbody td:last-child {
+  padding-right: 0;
+}
+
+.referral-plan-value {
+  color: var(--ref-cta-green);
+  font-weight: 700;
+}
+
 .referral-empty-state {
   margin: 0;
   color: var(--ref-text-muted);
+}
+
+.referral-pagination {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  gap: 12px;
+  margin-top: 18px;
+}
+
+.referral-pagination-button {
+  border: 0;
+  border-radius: 8px;
+  background: #2fbf71;
+  color: #ffffff;
+  font-weight: 600;
+  padding: 8px 14px;
+}
+
+.referral-pagination-button:first-child {
+  justify-self: start;
+}
+
+.referral-pagination-button:last-child {
+  justify-self: end;
+}
+
+.referral-pagination-button:disabled {
+  opacity: 0.5;
+}
+
+.referral-pagination-label {
+  color: var(--ref-text-muted);
+  text-align: center;
 }
 
 @media (max-width: 991px) {

@@ -34,6 +34,7 @@ class ReferralTransactionFactory extends Factory
             'server_id' => Server::factory(),
             'referral_id' => ReferralCode::factory(),
             'amount' => fake()->randomFloat(2, 0, 250),
+            'stripe_invoice_id' => 'in_'.fake()->lexify('????????????'),
         ];
     }
 }

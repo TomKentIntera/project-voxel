@@ -244,8 +244,14 @@
 /* ─── Card ───────────────────────────────────────────────────────── */
 .ui-card {
   background: #1f2a4b;
-  border: 1px solid #2a3861;
   border-radius: 10px;
+}
+
+.ui-card-header {
+  padding: 20px 22px 0;
+}
+
+.ui-card-body {
   padding: 20px 22px;
 }
 

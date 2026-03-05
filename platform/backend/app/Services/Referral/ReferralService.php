@@ -28,6 +28,7 @@ class ReferralService
             'user_id' => (int) $user->id,
             'discount_percent' => $this->defaultDiscountPercent(),
             'referral_percent' => $this->defaultReferralPercent(),
+            'valid_for_invoice_count' => $this->defaultInvoiceMonths(),
             'stripe_coupon_code' => null,
         ]);
 
@@ -89,6 +90,7 @@ class ReferralService
             'link' => $this->inviteLink((string) $referralCode->referral_code),
             'discount_percent' => (int) $referralCode->discount_percent,
             'referral_percent' => (int) $referralCode->referral_percent,
+            'valid_for_invoice_count' => max(1, (int) ($referralCode->valid_for_invoice_count ?? $this->defaultInvoiceMonths())),
             'referred_users_count' => $referredUsersCount,
             'referred_user_servers_count' => $referredUserServersCount,
             'revenue_last_30_days' => round($revenueLast30Days, 2),
@@ -129,6 +131,11 @@ class ReferralService
         return max(1, min(100, (int) config('referral.default_referral_percent', 10)));
     }
 
+    private function defaultInvoiceMonths(): int
+    {
+        return max(1, (int) config('referral.default_invoice_months', 3));
+    }
+
     private function generateUniqueReferralCode(): string
     {
         do {
@@ -154,7 +161,8 @@ class ReferralService
         try {
             $client = $this->stripeClientFactory->make();
             $discountPercent = (int) ($referralCode->discount_percent ?? $this->defaultDiscountPercent());
-            $couponId = $this->resolveOrCreateCouponId($discountPercent);
+            $invoiceMonths = max(1, (int) ($referralCode->valid_for_invoice_count ?? $this->defaultInvoiceMonths()));
+            $couponId = $this->resolveOrCreateCouponId($discountPercent, $invoiceMonths);
             $existing = $client->promotionCodes->all([
                 'code' => (string) $referralCode->referral_code,
                 'limit' => 1,
@@ -180,14 +188,15 @@ class ReferralService
         }
     }
 
-    private function resolveOrCreateCouponId(int $discountPercent): string
+    private function resolveOrCreateCouponId(int $discountPercent, int $invoiceMonths): string
     {
         $client = $this->stripeClientFactory->make();
         $coupons = $client->coupons->all(['limit' => 100]);
 
         foreach ($coupons->data as $coupon) {
             if (
-                (string) ($coupon->duration ?? '') === 'once'
+                (string) ($coupon->duration ?? '') === 'repeating'
+                && (int) ($coupon->duration_in_months ?? 0) === $invoiceMonths
                 && (float) ($coupon->percent_off ?? -1) === (float) $discountPercent
             ) {
                 return (string) $coupon->id;
@@ -196,8 +205,9 @@ class ReferralService
 
         $coupon = $client->coupons->create([
             'percent_off' => (float) $discountPercent,
-            'name' => sprintf('%d%% first month referral discount', $discountPercent),
-            'duration' => 'once',
+            'name' => sprintf('%d%% for first %d invoice months', $discountPercent, $invoiceMonths),
+            'duration' => 'repeating',
+            'duration_in_months' => $invoiceMonths,
         ]);
 
         return (string) $coupon->id;

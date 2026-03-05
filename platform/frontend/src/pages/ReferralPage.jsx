@@ -13,11 +13,13 @@ import '../styles/legacy-responsive.css'
 import '../styles/referral.css'
 
 export default function ReferralPage() {
+  const PAGE_SIZE = 10
   const { token } = useAuth()
   const [referral, setReferral] = useState(null)
   const [isLoading, setIsLoading] = useState(true)
   const [errorMessage, setErrorMessage] = useState('')
   const [copyState, setCopyState] = useState('idle')
+  const [currentPage, setCurrentPage] = useState(1)
 
   useEffect(() => {
     if (!token) {
@@ -63,6 +65,20 @@ export default function ReferralPage() {
     return referral.ledger
   }, [referral])
 
+  const totalPages = useMemo(
+    () => Math.max(1, Math.ceil(ledgerRows.length / PAGE_SIZE)),
+    [ledgerRows.length, PAGE_SIZE],
+  )
+
+  const pagedLedgerRows = useMemo(() => {
+    const startIndex = (currentPage - 1) * PAGE_SIZE
+    return ledgerRows.slice(startIndex, startIndex + PAGE_SIZE)
+  }, [currentPage, ledgerRows, PAGE_SIZE])
+
+  useEffect(() => {
+    setCurrentPage(1)
+  }, [ledgerRows.length])
+
   const copyReferralLink = async () => {
     if (!referral?.link) {
       return
@@ -107,19 +123,25 @@ export default function ReferralPage() {
               ) : referral ? (
                 <>
                   <Card className="referral-intro-card">
-                    <h3>How the referral program works</h3>
-                    <p>
-                      Share your referral link with friends. They receive a discount on their
-                      first payment, and once they pay you receive referral credit directly on
-                      your account for future invoices.
-                    </p>
+                    <Card.Body>
+                      <h3>How the referral program works</h3>
+                      <p>
+                        They get {referral.discount_percent}% off their first{' '}
+                        {referral.valid_for_invoice_count} months, and you earn{' '}
+                        {referral.referral_percent}% server credit for their first{' '}
+                        {referral.valid_for_invoice_count} invoices. Credit is applied only after
+                        payment succeeds.
+                      </p>
+                    </Card.Body>
                   </Card>
 
                   <div className="referral-hero-card">
                     <h3>Refer Friends &amp; Earn Credit</h3>
                     <p>
-                      Share your referral link. Friends get {referral.discount_percent}% off and
-                      you earn {referral.referral_percent}% as account credit when they pay.
+                      They get {referral.discount_percent}% off their first{' '}
+                      {referral.valid_for_invoice_count} months, and you earn{' '}
+                      {referral.referral_percent}% server credit for their first{' '}
+                      {referral.valid_for_invoice_count} invoices.
                     </p>
                     <div className="referral-link-row">
                       <input
@@ -145,55 +167,97 @@ export default function ReferralPage() {
 
                   <div className="referral-stats-grid">
                     <Card className="referral-stat-card">
-                      <div className="referral-stat-value">
-                        {Number(referral.referred_users_count || 0)}
-                      </div>
-                      <p className="referral-stat-label">Referred Users</p>
+                      <Card.Body className="referral-stat-card-body">
+                        <div className="referral-stat-value">
+                          {Number(referral.referred_users_count || 0)}
+                        </div>
+                        <p className="referral-stat-label">Referred Users</p>
+                      </Card.Body>
                     </Card>
                     <Card className="referral-stat-card">
-                      <div className="referral-stat-value">
-                        {Number(referral.referred_user_servers_count || 0)}
-                      </div>
-                      <p className="referral-stat-label">Referred User Servers</p>
+                      <Card.Body className="referral-stat-card-body">
+                        <div className="referral-stat-value">
+                          {Number(referral.referred_user_servers_count || 0)}
+                        </div>
+                        <p className="referral-stat-label">Referred User Servers</p>
+                      </Card.Body>
                     </Card>
                     <Card className="referral-stat-card">
-                      <div className="referral-stat-value">
-                        ${Number(referral.revenue_last_30_days || 0).toFixed(2)}
-                      </div>
-                      <p className="referral-stat-label">Referral Revenue (30 Days)</p>
+                      <Card.Body className="referral-stat-card-body">
+                        <div className="referral-stat-value">
+                          ${Number(referral.revenue_last_30_days || 0).toFixed(2)}
+                        </div>
+                        <p className="referral-stat-label">Referral Revenue (30 Days)</p>
+                      </Card.Body>
                     </Card>
                   </div>
 
                   <Card className="referral-table-card">
-                    <h3>Referral Transactions</h3>
-                    {ledgerRows.length === 0 ? (
-                      <p className="referral-empty-state">No referral earnings yet.</p>
-                    ) : (
-                      <div className="table-responsive">
-                        <table className="table referral-table">
-                          <thead>
-                            <tr>
-                              <th>Date</th>
-                              <th>Plan Purchased</th>
-                              <th>Referral Revenue</th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {ledgerRows.map((entry) => (
-                              <tr key={entry.id}>
-                                <td>
-                                  {entry.created_at
-                                    ? new Date(entry.created_at).toLocaleDateString()
-                                    : '-'}
-                                </td>
-                                <td>{entry.plan_purchased || '-'}</td>
-                                <td>${Number(entry.amount || 0).toFixed(2)}</td>
+                    <Card.Header>
+                      <h3>Referral Transactions</h3>
+                    </Card.Header>
+                    <Card.Body className="referral-table-body">
+                      {ledgerRows.length === 0 ? (
+                        <p className="referral-empty-state">No referral earnings yet.</p>
+                      ) : (
+                        <div className="table-responsive">
+                          <table className="table referral-table">
+                            <thead>
+                              <tr>
+                                <th>Date</th>
+                                <th>Plan Purchased</th>
+                                <th>Referral Revenue</th>
                               </tr>
-                            ))}
-                          </tbody>
-                        </table>
-                      </div>
-                    )}
+                            </thead>
+                            <tbody>
+                              {pagedLedgerRows.map((entry) => (
+                                <tr key={entry.id}>
+                                  <td>
+                                    {entry.created_at
+                                      ? new Date(entry.created_at).toLocaleDateString()
+                                      : '-'}
+                                  </td>
+                                  <td>
+                                    <span className="referral-plan-value">
+                                      {entry.plan_purchased
+                                        ? String(entry.plan_purchased).charAt(0).toUpperCase() +
+                                          String(entry.plan_purchased).slice(1)
+                                        : '-'}
+                                    </span>
+                                  </td>
+                                  <td>${Number(entry.amount || 0).toFixed(2)}</td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      )}
+                      {ledgerRows.length > PAGE_SIZE ? (
+                        <div className="referral-pagination">
+                          <button
+                            type="button"
+                            className="referral-pagination-button"
+                            onClick={() => setCurrentPage((page) => Math.max(1, page - 1))}
+                            disabled={currentPage === 1}
+                          >
+                            Previous
+                          </button>
+                          <span className="referral-pagination-label">
+                            Page {currentPage} of {totalPages}
+                          </span>
+                          <button
+                            type="button"
+                            className="referral-pagination-button"
+                            onClick={() =>
+                              setCurrentPage((page) => Math.min(totalPages, page + 1))
+                            }
+                            disabled={currentPage === totalPages}
+                          >
+                            Next
+                          </button>
+                        </div>
+                      ) : null}
+                    </Card.Body>
                   </Card>
                 </>
               ) : null}

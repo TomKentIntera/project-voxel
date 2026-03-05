@@ -162,7 +162,7 @@ class StripeWebhookService
      */
     private function applyReferralCreditIfEligible(Server $server, array $invoice): void
     {
-        if ((bool) $server->referral_paid || ! is_numeric($server->referral_id) || (int) $server->referral_id <= 0) {
+        if (! is_numeric($server->referral_id) || (int) $server->referral_id <= 0) {
             return;
         }
 
@@ -170,31 +170,56 @@ class StripeWebhookService
         if (! is_int($amountPaidMinor) || $amountPaidMinor <= 0) {
             return;
         }
+        $invoiceId = $invoice['id'] ?? null;
+        if (is_string($invoiceId)) {
+            $invoiceId = trim($invoiceId);
+            if ($invoiceId === '') {
+                $invoiceId = null;
+            }
+        } else {
+            $invoiceId = null;
+        }
 
         $currency = strtolower((string) ($invoice['currency'] ?? 'usd'));
         if ($currency === '') {
             $currency = 'usd';
         }
 
-        DB::transaction(function () use ($server, $amountPaidMinor, $currency): void {
+        DB::transaction(function () use ($server, $amountPaidMinor, $currency, $invoiceId): void {
             $lockedServer = Server::query()->lockForUpdate()->find($server->id);
             if ($lockedServer === null) {
                 return;
             }
 
-            if ((bool) $lockedServer->referral_paid || ! is_numeric($lockedServer->referral_id) || (int) $lockedServer->referral_id <= 0) {
-                return;
-            }
-
-            if (ReferralTransaction::query()->where('server_id', (int) $lockedServer->id)->exists()) {
-                $lockedServer->referral_paid = true;
-                $lockedServer->save();
-
+            if (! is_numeric($lockedServer->referral_id) || (int) $lockedServer->referral_id <= 0) {
                 return;
             }
 
             $referralCode = $lockedServer->referralcode()->first();
             if ($referralCode === null || ! is_numeric($referralCode->user_id) || (int) $referralCode->user_id <= 0) {
+                return;
+            }
+            $validInvoiceCount = max(1, (int) ($referralCode->valid_for_invoice_count ?? config('referral.default_invoice_months', 3)));
+
+            if (is_string($invoiceId) && $invoiceId !== '') {
+                $alreadyCreditedThisInvoice = ReferralTransaction::query()
+                    ->where('server_id', (int) $lockedServer->id)
+                    ->where('stripe_invoice_id', $invoiceId)
+                    ->exists();
+
+                if ($alreadyCreditedThisInvoice) {
+                    return;
+                }
+            }
+
+            $creditedInvoiceCount = (int) ReferralTransaction::query()
+                ->where('server_id', (int) $lockedServer->id)
+                ->count();
+
+            if ($creditedInvoiceCount >= $validInvoiceCount) {
+                $lockedServer->referral_paid = true;
+                $lockedServer->save();
+
                 return;
             }
 
@@ -239,9 +264,10 @@ class StripeWebhookService
                 'server_id' => (int) $lockedServer->id,
                 'referral_id' => (int) $referralCode->id,
                 'amount' => round($creditMinor / 100, 2),
+                'stripe_invoice_id' => $invoiceId,
             ]);
 
-            $lockedServer->referral_paid = true;
+            $lockedServer->referral_paid = ($creditedInvoiceCount + 1) >= $validInvoiceCount;
             $lockedServer->save();
         });
     }

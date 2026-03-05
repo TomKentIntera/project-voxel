@@ -3759,6 +3759,8 @@ li.server-row {
 
 .account-nav a {
     padding: 20px;
+    color: #c5cde9;
+    text-decoration: none;
 }
 
 .account-nav a:hover {
@@ -3991,7 +3993,7 @@ p.server-date {
     padding: 20px;
     background: none;
     border: none;
-    color: inherit;
+    color: #c5cde9;
     font: inherit;
     text-align: left;
     cursor: pointer;

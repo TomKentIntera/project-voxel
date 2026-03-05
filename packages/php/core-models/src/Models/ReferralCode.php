@@ -25,6 +25,7 @@ class ReferralCode extends Model
         'user_id',
         'discount_percent',
         'referral_percent',
+        'valid_for_invoice_count',
         'stripe_coupon_code',
     ];
 
